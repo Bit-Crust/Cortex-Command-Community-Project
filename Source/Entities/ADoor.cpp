@@ -145,7 +145,11 @@ int ADoor::ReadProperty(const std::string_view& propName, Reader& reader) {
 	MatchProperty("ClosedByDefault", { reader >> m_ClosedByDefault; });
 	MatchProperty("ResetDefaultDelay", { reader >> m_ResetToDefaultStateDelay; });
 	MatchProperty("SensorInterval", { reader >> m_SensorInterval; });
-	MatchProperty("AddSensor", {
+	MatchProperty("_ClearSensors", {
+		reader.ReadPropValue();
+		m_Sensors.clear();
+	});
+	MatchForwards("AddSensor") MatchProperty("_AddSensor", {
 		ADSensor sensor;
 		reader >> sensor;
 		m_Sensors.push_back(sensor);
@@ -163,42 +167,124 @@ int ADoor::ReadProperty(const std::string_view& propName, Reader& reader) {
 int ADoor::Save(Writer& writer) const {
 	Actor::Save(writer);
 
-	writer.NewProperty("Door");
-	writer << m_Door;
-	writer.NewProperty("OpenOffset");
-	writer << m_OpenOffset;
-	writer.NewProperty("ClosedOffset");
-	writer << m_ClosedOffset;
-	writer.NewProperty("OpenAngle");
-	writer << Matrix(m_OpenAngle);
-	writer.NewProperty("ClosedAngle");
-	writer << Matrix(m_ClosedAngle);
-	writer.NewProperty("DoorDelay");
-	writer << m_DoorMoveTime;
-	writer.NewProperty("ClosedByDefault");
-	writer << m_ClosedByDefault;
-	writer.NewProperty("ResetDefaultDelay");
-	writer << m_ResetToDefaultStateDelay;
-	writer.NewProperty("SensorInterval");
-	writer << m_SensorInterval;
+	writer.NewPropertyWithValue("Door", m_Door);
+	writer.NewPropertyWithValue("OpenOffset", m_OpenOffset);
+	writer.NewPropertyWithValue("ClosedOffset", m_ClosedOffset);
+	writer.NewPropertyWithValue("OpenAngle", Matrix(m_OpenAngle));
+	writer.NewPropertyWithValue("ClosedAngle", Matrix(m_ClosedAngle));
+	writer.NewPropertyWithValue("DoorMoveTime", m_DoorMoveTime);
+	writer.NewPropertyWithValue("ClosedByDefault", m_ClosedByDefault);
+	writer.NewPropertyWithValue("ResetDefaultDelay", m_ResetToDefaultStateDelay);
+	writer.NewPropertyWithValue("SensorInterval", m_SensorInterval);
 	for (const ADSensor& sensor: m_Sensors) {
-		writer.NewProperty("AddSensor");
-		writer << sensor;
+		writer.NewPropertyWithValue("AddSensor", sensor);
 	}
-	writer.NewProperty("DrawMaterialLayerWhenOpen");
-	writer << m_DrawMaterialLayerWhenOpen;
-	writer.NewProperty("DrawMaterialLayerWhenClosed");
-	writer << m_DrawMaterialLayerWhenClosed;
-	writer.NewProperty("DoorMoveStartSound");
-	writer << m_DoorMoveStartSound.get();
-	writer.NewProperty("DoorMoveSound");
-	writer << m_DoorMoveSound.get();
-	writer.NewProperty("DoorDirectionChangeSound");
-	writer << m_DoorDirectionChangeSound.get();
-	writer.NewProperty("DoorMoveEndSound");
-	writer << m_DoorMoveEndSound.get();
+	writer.NewPropertyWithValue("DrawMaterialLayerWhenOpen", m_DrawMaterialLayerWhenOpen);
+	writer.NewPropertyWithValue("DrawMaterialLayerWhenClosed", m_DrawMaterialLayerWhenClosed);
+	writer.NewPropertyWithValue("DoorMoveStartSound", m_DoorMoveStartSound.get());
+	writer.NewPropertyWithValue("DoorMoveSound", m_DoorMoveSound.get());
+	writer.NewPropertyWithValue("DoorDirectionChangeSound", m_DoorDirectionChangeSound.get());
+	writer.NewPropertyWithValue("DoorMoveEndSound", m_DoorMoveEndSound.get());
 
 	return 0;
+}
+
+int ADoor::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	size_t constituentsConsumed = Actor::Write(writer, entityReference, hashData); // 11
+
+	const ADoor& reference = static_cast<const ADoor&>(entityReference);
+
+	writer.NewOptionalEntityPointerProperty("Door", m_Door, hashData);
+	writer.NewDistinctProperty("OpenOffset", m_OpenOffset, reference.m_OpenOffset);
+	writer.NewDistinctProperty("ClosedOffset", m_ClosedOffset, reference.m_ClosedOffset);
+
+	if (m_OpenAngle != reference.m_OpenAngle)
+		writer.NewPropertyWithValue("OpenAngle", Matrix(m_OpenAngle));
+	if (m_ClosedAngle != reference.m_ClosedAngle)
+		writer.NewPropertyWithValue("ClosedAngle", Matrix(m_ClosedAngle));
+
+	writer.NewDistinctProperty("DoorMoveTime", m_DoorMoveTime, reference.m_DoorMoveTime);
+	writer.NewDistinctProperty("ClosedByDefault", m_ClosedByDefault, reference.m_ClosedByDefault);
+	writer.NewDistinctProperty("ResetDefaultDelay", m_ResetToDefaultStateDelay, reference.m_ResetToDefaultStateDelay);
+	writer.NewDistinctProperty("SensorInterval", m_SensorInterval, reference.m_SensorInterval);
+	writer.NewSequence("_ClearSensors", "_AddSensor", m_Sensors, hashData);
+	writer.NewDistinctProperty("DrawMaterialLayerWhenOpen", m_DrawMaterialLayerWhenOpen, reference.m_DrawMaterialLayerWhenOpen);
+	writer.NewDistinctProperty("DrawMaterialLayerWhenClosed", m_DrawMaterialLayerWhenClosed, reference.m_DrawMaterialLayerWhenClosed);
+	writer.NewOptionalEntityPointerProperty("DoorMoveStartSound", m_DoorMoveStartSound.get(), hashData);
+	writer.NewOptionalEntityPointerProperty("DoorMoveSound", m_DoorMoveSound.get(), hashData);
+	writer.NewOptionalEntityPointerProperty("DoorDirectionChangeSound", m_DoorDirectionChangeSound.get(), hashData);
+	writer.NewOptionalEntityPointerProperty("DoorMoveEndSound", m_DoorMoveEndSound.get(), hashData);
+
+	return 0;
+}
+
+HashingData ADoor::Hash() const {
+	HashingData hashData(Actor::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	bool doorDef = m_Door != nullptr;
+	hashData.m_ParseValues.push_back(doorDef);
+	if (doorDef) {
+		uint64_t doorHash = m_Door->Hash().m_Hash;
+		hashData.m_Constituents.push_back(doorHash);
+		hash ^= doorHash << 1;
+	}
+
+	hash ^= m_OpenOffset.Hash().m_Hash << 2;
+	hash ^= m_ClosedOffset.Hash().m_Hash << 3;
+	hash ^= static_cast<uint64_t>(m_OpenAngle) << 4;
+	hash ^= static_cast<uint64_t>(m_ClosedAngle) << 5;
+	hash ^= static_cast<uint64_t>(m_DoorMoveTime) << 6;
+	hash ^= static_cast<uint64_t>(m_ClosedByDefault) << 7;
+	hash ^= static_cast<uint64_t>(m_ResetToDefaultStateDelay) << 8;
+	hash ^= static_cast<uint64_t>(m_SensorInterval) << 9;
+
+	int i = 0;
+
+	for (const ADSensor& sensor: m_Sensors) {
+		uint64_t sensorHash = sensor.Hash().m_Hash;
+		hashData.m_Constituents.push_back(sensorHash);
+		hash ^= sensorHash << (i++ % sizeof(uint64_t) * 8);
+	}
+
+	hashData.m_ParseValues.push_back(i);
+
+	hash ^= static_cast<uint64_t>(m_DrawMaterialLayerWhenOpen) << 10;
+	hash ^= static_cast<uint64_t>(m_DrawMaterialLayerWhenClosed) << 11;
+
+	bool doorMoveStartSoundDef = m_DoorMoveStartSound != nullptr;
+	hashData.m_ParseValues.push_back(doorMoveStartSoundDef);
+	if (doorMoveStartSoundDef) {
+		uint64_t doorMoveStartSoundHash = m_DoorMoveStartSound->Hash().m_Hash;
+		hashData.m_Constituents.push_back(doorMoveStartSoundHash);
+		hash ^= doorMoveStartSoundHash << 12;
+	}
+
+	bool doorMoveSoundDef = m_DoorMoveSound != nullptr;
+	hashData.m_ParseValues.push_back(doorMoveSoundDef);
+	if (doorMoveSoundDef) {
+		uint64_t doorMoveSoundHash = m_DoorMoveSound->Hash().m_Hash;
+		hashData.m_Constituents.push_back(doorMoveSoundHash);
+		hash ^= doorMoveSoundHash << 12;
+	}
+
+	bool doorDirectionChangeSoundDef = m_DoorDirectionChangeSound != nullptr;
+	hashData.m_ParseValues.push_back(doorDirectionChangeSoundDef);
+	if (doorDirectionChangeSoundDef) {
+		uint64_t doorDirectionChangeSoundHash = m_DoorDirectionChangeSound->Hash().m_Hash;
+		hashData.m_Constituents.push_back(doorDirectionChangeSoundHash);
+		hash ^= doorDirectionChangeSoundHash << 12;
+	}
+
+	bool doorMoveEndSoundDef = m_DoorMoveEndSound != nullptr;
+	hashData.m_ParseValues.push_back(doorMoveEndSoundDef);
+	if (doorMoveEndSoundDef) {
+		uint64_t doorMoveEndSoundHash = m_DoorMoveEndSound->Hash().m_Hash;
+		hashData.m_Constituents.push_back(doorMoveEndSoundHash);
+		hash ^= doorMoveEndSoundHash << 12;
+	}
+
+	return hashData;
 }
 
 void ADoor::Destroy(bool notInherited) {

@@ -125,29 +125,103 @@ int ACDropShip::ReadProperty(const std::string_view& propName, Reader& reader) {
 int ACDropShip::Save(Writer& writer) const {
 	ACraft::Save(writer);
 
-	writer.NewProperty("RThruster");
-	writer << m_pRThruster;
-	writer.NewProperty("LThruster");
-	writer << m_pLThruster;
-	writer.NewProperty("URThruster");
-	writer << m_pURThruster;
-	writer.NewProperty("ULThruster");
-	writer << m_pULThruster;
-	writer.NewProperty("RHatchDoor");
-	writer << m_pRHatch;
-	writer.NewProperty("LHatchDoor");
-	writer << m_pLHatch;
-	writer.NewProperty("HatchDoorSwingRange");
-	writer << m_HatchSwingRange;
-	writer.NewProperty("AutoStabilize");
-	writer << m_AutoStabilize;
-	writer.NewProperty("MaxEngineAngle");
-	writer << m_MaxEngineAngle;
-	writer.NewProperty("LateralControlSpeed");
-	writer << m_LateralControlSpeed;
+	writer.NewPropertyWithValue("RThruster", m_pRThruster);
+	writer.NewPropertyWithValue("LThruster", m_pLThruster);
+	writer.NewPropertyWithValue("URThruster", m_pURThruster);
+	writer.NewPropertyWithValue("ULThruster", m_pULThruster);
+	writer.NewPropertyWithValue("RHatchDoor", m_pRHatch);
+	writer.NewPropertyWithValue("LHatchDoor", m_pLHatch);
+	writer.NewPropertyWithValue("HatchDoorSwingRange", m_HatchSwingRange);
+	writer.NewPropertyWithValue("AutoStabilize", m_AutoStabilize);
+	writer.NewPropertyWithValue("MaxEngineAngle", m_MaxEngineAngle);
+	writer.NewPropertyWithValue("LateralControlSpeed", m_LateralControlSpeed);
 	writer.NewPropertyWithValue("HoverHeightModifier", m_HoverHeightModifier);
 
 	return 0;
+}
+
+int ACDropShip::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	ACraft::Write(writer, entityReference, hashData);
+
+	const ACDropShip& reference = static_cast<const ACDropShip&>(entityReference);
+
+	writer.NewOptionalEntityPointerProperty("RThruster", m_pRThruster, hashData);
+	writer.NewOptionalEntityPointerProperty("LThruster", m_pLThruster, hashData);
+	writer.NewOptionalEntityPointerProperty("URThruster", m_pURThruster, hashData);
+	writer.NewOptionalEntityPointerProperty("ULThruster", m_pULThruster, hashData);
+	writer.NewOptionalEntityPointerProperty("RHatchDoor", m_pRHatch, hashData);
+	writer.NewOptionalEntityPointerProperty("LHatchDoor", m_pLHatch, hashData);
+	writer.NewDistinctProperty("HatchDoorSwingRange", m_HatchSwingRange, reference.m_HatchSwingRange);
+	writer.NewDistinctProperty("AutoStabilize", m_AutoStabilize, reference.m_AutoStabilize);
+	writer.NewDistinctProperty("MaxEngineAngle", m_MaxEngineAngle, reference.m_MaxEngineAngle);
+	writer.NewDistinctProperty("LateralControlSpeed", m_LateralControlSpeed, reference.m_LateralControlSpeed);
+	writer.NewDistinctProperty("HoverHeightModifier", m_HoverHeightModifier, reference.m_HoverHeightModifier);
+
+	return 0;
+}
+
+HashingData ACDropShip::Hash() const {
+	HashingData hashData(ACraft::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	bool rThrusterDef = m_pRThruster != nullptr;
+	hashData.m_ParseValues.push_back(rThrusterDef);
+	if (rThrusterDef) {
+		uint64_t rThrusterHash = m_pRThruster->Hash().m_Hash;
+		hashData.m_Constituents.push_back(rThrusterHash);
+		hash ^= rThrusterHash << 0;
+	}
+
+	bool lThrusterDef = m_pLThruster != nullptr;
+	hashData.m_ParseValues.push_back(lThrusterDef);
+	if (lThrusterDef) {
+		uint64_t lThrusterHash = m_pLThruster->Hash().m_Hash;
+		hashData.m_Constituents.push_back(lThrusterHash);
+		hash ^= lThrusterHash << 1;
+	}
+
+	bool urThrusterDef = m_pURThruster != nullptr;
+	hashData.m_ParseValues.push_back(urThrusterDef);
+	if (urThrusterDef) {
+		uint64_t urThrusterHash = m_pURThruster->Hash().m_Hash;
+		hashData.m_Constituents.push_back(urThrusterHash);
+		hash ^= urThrusterHash << 2;
+	}
+
+	bool ulThrusterDef = m_pULThruster != nullptr;
+	hashData.m_ParseValues.push_back(ulThrusterDef);
+	if (ulThrusterDef) {
+		uint64_t ulThrusterHash = m_pULThruster->Hash().m_Hash;
+		hashData.m_Constituents.push_back(ulThrusterHash);
+		hash ^= ulThrusterHash << 3;
+	}
+
+	bool rHatchDef = m_pRHatch != nullptr;
+	hashData.m_ParseValues.push_back(rHatchDef);
+	if (rHatchDef) {
+		uint64_t rHatchHash = m_pRHatch->Hash().m_Hash;
+		hashData.m_Constituents.push_back(rHatchHash);
+		hash ^= rHatchHash << 4;
+	}
+
+	bool lHatchDef = m_pLHatch != nullptr;
+	hashData.m_ParseValues.push_back(lHatchDef);
+	if (lHatchDef) {
+		uint64_t lHatchHash = m_pLHatch->Hash().m_Hash;
+		hashData.m_Constituents.push_back(lHatchHash);
+		hash ^= lHatchHash << 5;
+	}
+
+	uint64_t hatchSwingRangeHash = m_HatchSwingRange.Hash().m_Hash;
+	hashData.m_Constituents.push_back(hatchSwingRangeHash);
+	hash ^= hatchSwingRangeHash << 6;
+
+	hash ^= static_cast<uint64_t>(m_AutoStabilize) << 7;
+	hash ^= static_cast<uint64_t>(m_MaxEngineAngle) << 8;
+	hash ^= static_cast<uint64_t>(m_LateralControlSpeed) << 9;
+	hash ^= static_cast<uint64_t>(m_HoverHeightModifier) << 10;
+
+	return hashData;
 }
 
 void ACDropShip::Destroy(bool notInherited) {

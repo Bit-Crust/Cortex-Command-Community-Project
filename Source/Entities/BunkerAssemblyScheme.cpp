@@ -180,13 +180,16 @@ int BunkerAssemblyScheme::ReadProperty(const std::string_view& propName, Reader&
 					              rectfill(m_pIconBitmap, x * ScaleX * scale, y * ScaleY * scale, x * ScaleX * scale + ScaleX - 1, y * ScaleY + ScaleY - 1, PAINT_COLOR_VARIABLE);
 			              }
 	              });
-	MatchProperty("AddChildObject",
-	              {
-		              SOPlacer newChild;
-		              reader >> newChild;
-		              newChild.SetTeam(m_Team);
-		              m_ChildObjects.push_back(newChild);
-	              });
+	MatchProperty("_ClearChildObjects", {
+		reader.ReadPropValue();
+		m_ChildObjects.clear();
+	});
+	MatchForwards("AddChildObject") MatchProperty("_AddChildObject", {
+		SOPlacer newChild;
+		reader >> newChild;
+		newChild.SetTeam(m_Team);
+		m_ChildObjects.push_back(newChild);
+	});
 	MatchProperty("Limit", { reader >> m_Limit; });
 	MatchProperty("OneTypePerScene", { reader >> m_IsOneTypePerScene; });
 	MatchProperty("MaxDeployments", { reader >> m_MaxDeployments; });
@@ -199,14 +202,45 @@ int BunkerAssemblyScheme::ReadProperty(const std::string_view& propName, Reader&
 int BunkerAssemblyScheme::Save(Writer& writer) const {
 	SceneObject::Save(writer);
 
-	writer.NewProperty("BitmapFile");
-	writer << m_BitmapFile;
+	writer.NewPropertyWithValue("BitmapFile", m_BitmapFile);
 	for (std::list<SOPlacer>::const_iterator itr = m_ChildObjects.begin(); itr != m_ChildObjects.end(); ++itr) {
 		writer.NewProperty("AddChildObject");
 		writer << (*itr);
 	}
 
 	return 0;
+}
+
+int BunkerAssemblyScheme::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	SceneObject::Write(writer, entityReference, hashData);
+
+	const BunkerAssemblyScheme& reference = static_cast<const BunkerAssemblyScheme&>(entityReference);
+
+	writer.NewDistinctHashedProperty("BitmapFile", m_BitmapFile, hashData);
+	writer.NewSequence("_ClearChildObjects", "_AddChildObject", m_ChildObjects, hashData);
+
+	return 0;
+}
+
+HashingData BunkerAssemblyScheme::Hash() const {
+	HashingData hashData(SceneObject::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	uint64_t bitmapHash = m_BitmapFile.Hash().m_Hash;
+	hashData.m_Constituents.push_back(bitmapHash);
+	hash ^= bitmapHash << 0;
+
+	int i = 0;
+
+	for (std::list<SOPlacer>::const_iterator itr = m_ChildObjects.begin(); itr != m_ChildObjects.end(); ++itr) {
+		uint64_t childHash = (*itr).Hash().m_Hash;
+		hashData.m_Constituents.push_back(childHash);
+		hash ^= childHash << (i++ % sizeof(uint64_t) * 8);
+	}
+
+	hashData.m_ParseValues.push_back(i);
+
+	return hashData;
 }
 
 void BunkerAssemblyScheme::Destroy(bool notInherited) {

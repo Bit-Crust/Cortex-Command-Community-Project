@@ -122,6 +122,11 @@ int MultiplayerServerLobby::Save(Writer& writer) const {
 	return 0;
 }
 
+HashingData MultiplayerServerLobby::Hash() const {
+	// If we don't save any distinguishing characteristics for saving, at all, then this may as well be
+	return GameActivity::Hash();
+}
+
 void MultiplayerServerLobby::Destroy(bool notInherited) {
 	delete m_pGUIController;
 	delete m_pGUIInput;
@@ -304,7 +309,7 @@ void MultiplayerServerLobby::UpdateActivityBox() {
 			// Fill scenes combo with compatible scenes
 			for (std::list<Scene*>::iterator pItr = m_pScenes->begin(); pItr != m_pScenes->end(); ++pItr) {
 				Scene* pScene = (*pItr);
-				m_pSceneSelect->AddItem(pScene->GetPresetName(), "", 0, pScene);
+				m_pSceneSelect->AddItem(pScene->GetDisplayName(), "", 0, pScene);
 			}
 
 			if (m_pSceneSelect->GetCount() > 0)
@@ -863,7 +868,7 @@ void MultiplayerServerLobby::GetAllScenesAndActivities() {
 
 			m_Activities.insert(newPair);
 			// Add to the activity selection combo, and attach the activity copy, not passing in ownership
-			m_pActivitySelect->AddItem(pActivity->GetPresetName(), "", 0, pActivity);
+			m_pActivitySelect->AddItem(pActivity->GetDisplayName(), "", 0, pActivity);
 
 			// Save the tutorial mission so we can select it by default
 #ifdef DEBUG_BUILD

@@ -67,17 +67,18 @@ int GibEditor::Create(const GibEditor& reference) {
 
 int GibEditor::ReadProperty(const std::string_view& propName, Reader& reader) {
 	StartPropertyList(return EditorActivity::ReadProperty(propName, reader));
-	/*
-	    MatchProperty("CPUTeam", { reader >> m_CPUTeam; });
-	    MatchProperty("Difficulty", { reader >> m_Difficulty; });
-	    MatchProperty("DeliveryDelay", { reader >> m_DeliveryDelay; });
-	*/
+
 	EndPropertyList;
 }
 
 int GibEditor::Save(Writer& writer) const {
 	EditorActivity::Save(writer);
 	return 0;
+}
+
+HashingData GibEditor::Hash() const {
+	// If we don't save any distinguishing characteristics, at all, then this may as well be
+	return EditorActivity::Hash();
 }
 
 void GibEditor::Destroy(bool notInherited) {

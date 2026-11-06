@@ -109,43 +109,65 @@ int SLBackground::ReadProperty(const std::string_view& propName, Reader& reader)
 	});
 	MatchProperty("SpriteAnimDuration", { reader >> m_SpriteAnimDuration; });
 	MatchProperty("IsAnimatedManually", { reader >> m_IsAnimatedManually; });
-	MatchProperty("DrawTransparent", { reader >> m_DrawMasked; });
-	MatchProperty("ScrollRatio", {
-		// Actually read the ScrollInfo, not the ratio. The ratios will be initialized later.
-		reader >> m_ScrollInfo;
-	});
-	MatchProperty("ScaleFactor", {
-		reader >> m_ScaleFactor;
-		SetScaleFactor(m_ScaleFactor);
-	});
-	MatchProperty("IgnoreAutoScaling", { reader >> m_IgnoreAutoScale; });
-	MatchProperty("OriginPointOffset", { reader >> m_OriginOffset; });
-	MatchProperty("CanAutoScrollX", { reader >> m_CanAutoScrollX; });
-	MatchProperty("CanAutoScrollY", { reader >> m_CanAutoScrollY; });
 	MatchProperty("AutoScrollStepInterval", { reader >> m_AutoScrollStepInterval; });
 	MatchProperty("AutoScrollStep", { reader >> m_AutoScrollStep; });
+	MatchProperty("IgnoreAutoScaling", { reader >> m_IgnoreAutoScale; });
+	MatchProperty("CanAutoScrollX", { reader >> m_CanAutoScrollX; });
+	MatchProperty("CanAutoScrollY", { reader >> m_CanAutoScrollY; });
 
 	EndPropertyList;
 }
-
 int SLBackground::Save(Writer& writer) const {
 	StaticSceneLayer::Save(writer);
 
-	writer.NewPropertyWithValue("FrameCount", m_FrameCount);
-	writer.NewPropertyWithValue("SpriteAnimMode", m_SpriteAnimMode);
-	writer.NewPropertyWithValue("SpriteAnimDuration", m_SpriteAnimDuration);
-	writer.NewPropertyWithValue("IsAnimatedManually", m_IsAnimatedManually);
-	writer.NewPropertyWithValue("DrawTransparent", m_DrawMasked);
-	writer.NewPropertyWithValue("ScrollRatio", m_ScrollInfo);
-	writer.NewPropertyWithValue("ScaleFactor", m_ScaleFactor);
-	writer.NewPropertyWithValue("IgnoreAutoScaling", m_IgnoreAutoScale);
-	writer.NewPropertyWithValue("OriginPointOffset", m_OriginOffset);
-	writer.NewPropertyWithValue("CanAutoScrollX", m_CanAutoScrollX);
-	writer.NewPropertyWithValue("CanAutoScrollY", m_CanAutoScrollY);
-	writer.NewPropertyWithValue("AutoScrollStepInterval", m_AutoScrollStepInterval);
-	writer.NewPropertyWithValue("AutoScrollStep", m_AutoScrollStep);
+	writer.NewDistinctProperty("FrameCount", m_FrameCount, 1);
+	writer.NewDistinctProperty("SpriteAnimMode", m_SpriteAnimMode, SpriteAnimMode::NOANIM);
+	writer.NewDistinctProperty("SpriteAnimDuration", m_SpriteAnimDuration, 1000);
+	writer.NewDistinctProperty("IsAnimatedManually", m_IsAnimatedManually, false);
+	writer.NewDistinctProperty("AutoScrollStepInterval", m_AutoScrollStepInterval, 0);
+
+	if (!m_AutoScrollStep.IsZero())
+		writer.NewPropertyWithValue("AutoScrollStep", m_AutoScrollStep);
+
+	writer.NewDistinctProperty("IgnoreAutoScaling", m_IgnoreAutoScale, false);
+	writer.NewDistinctProperty("CanAutoScrollX", m_CanAutoScrollX, false);
+	writer.NewDistinctProperty("CanAutoScrollY", m_CanAutoScrollY, false);
 
 	return 0;
+}
+
+int SLBackground::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	StaticSceneLayer::Write(writer, entityReference, hashData);
+
+	const SLBackground& reference = static_cast<const SLBackground&>(entityReference);
+
+	writer.NewDistinctProperty("FrameCount", m_FrameCount, reference.m_FrameCount);
+	writer.NewDistinctProperty("SpriteAnimMode", m_SpriteAnimMode, reference.m_SpriteAnimMode);
+	writer.NewDistinctProperty("SpriteAnimDuration", m_SpriteAnimDuration, reference.m_SpriteAnimDuration);
+	writer.NewDistinctProperty("IsAnimatedManually", m_IsAnimatedManually, reference.m_IsAnimatedManually);
+	writer.NewDistinctProperty("AutoScrollStepInterval", m_AutoScrollStepInterval, reference.m_AutoScrollStepInterval);
+	writer.NewDistinctProperty("AutoScrollStep", m_AutoScrollStep, reference.m_AutoScrollStep);
+	writer.NewDistinctProperty("IgnoreAutoScaling", m_IgnoreAutoScale, reference.m_IgnoreAutoScale);
+	writer.NewDistinctProperty("CanAutoScrollX", m_CanAutoScrollX, reference.m_CanAutoScrollX);
+	writer.NewDistinctProperty("CanAutoScrollY", m_CanAutoScrollY, reference.m_CanAutoScrollY);
+
+	return 0;
+}
+
+HashingData SLBackground::Hash() const {
+	HashingData hashData(StaticSceneLayer::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	hash ^= static_cast<uint64_t>(m_FrameCount) << 1;
+	hash ^= static_cast<uint64_t>(m_SpriteAnimMode) << 2;
+	hash ^= static_cast<uint64_t>(m_SpriteAnimDuration) << 3;
+	hash ^= static_cast<uint64_t>(m_IsAnimatedManually) << 4;
+	hash ^= static_cast<uint64_t>(m_AutoScrollStepInterval) << 5;
+	hash ^= m_AutoScrollStep.Hash().m_Hash << 6;
+	hash ^= static_cast<uint64_t>(m_CanAutoScrollX) << 7;
+	hash ^= static_cast<uint64_t>(m_CanAutoScrollY) << 8;
+
+	return hashData;
 }
 
 void SLBackground::InitScaleFactors() {

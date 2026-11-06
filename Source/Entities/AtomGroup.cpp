@@ -5,6 +5,7 @@
 #include "MOSRotating.h"
 #include "LimbPath.h"
 #include "ConsoleMan.h"
+#include "PresetMan.h"
 
 #include "tracy/Tracy.hpp"
 
@@ -69,12 +70,17 @@ int AtomGroup::Create(const AtomGroup& reference, bool onlyCopyOwnerAtoms) {
 
 	m_OwnerMOSR = nullptr; // Needs to be set manually by the new MO owner.
 	m_Material = reference.m_Material;
-	m_AutoGenerate = false; /*reference.m_AutoGenerate;*/ // TODO: Investigate if AutoGenerating here can screw something up when copy-creating over an existing AtomGroup.
+	m_AutoGenerate = reference.m_AutoGenerate;
 	m_Resolution = reference.m_Resolution;
 	m_Depth = reference.m_Depth;
 	m_JointOffset = reference.m_JointOffset;
 	m_AreaDistributionType = reference.m_AreaDistributionType;
 	m_AreaDistributionSurfaceAreaMultiplier = reference.m_AreaDistributionSurfaceAreaMultiplier;
+
+	// This can be copying over what's already here, as CopyOf does.
+	for (const Atom* atom: m_Atoms) {
+		delete atom;
+	}
 
 	m_Atoms.clear();
 	m_SubGroups.clear();
@@ -127,21 +133,25 @@ int AtomGroup::ReadProperty(const std::string_view& propName, Reader& reader) {
 	StartPropertyList(return Entity::ReadProperty(propName, reader));
 
 	MatchProperty("Material", {
-		Material mat;
-		mat.Reset();
-		reader >> mat;
-		m_Material = mat.GetIndex() ? g_SceneMan.GetMaterialFromID(mat.GetIndex()) : g_SceneMan.GetMaterial(mat.GetPresetName());
-
-		if (!m_Material) {
-			g_ConsoleMan.PrintString("ERROR: Failed to find matching Material preset \"" + mat.GetPresetName() + "\" " + GetFormattedReaderPosition() + ". Was it defined with AddMaterial?");
-			m_Material = g_SceneMan.GetMaterialFromID(g_MaterialAir);
-			RTEAssert(m_Material, "Failed to find matching Material preset \"" + mat.GetPresetName() + "\" or even fall back to \"Air\" " + GetFormattedReaderPosition() + ".\nAborting!");
+		const Entity* entityReference = g_PresetMan.GetEntityPresetFromCharacteristic(reader);
+		const Material* reference = dynamic_cast<const Material*>(entityReference);
+		if (entityReference == nullptr || reference != nullptr) {
+			m_Material = reference;
+		} else {
+			reader.ReportError("Tried to point Material to a non-Material type!");
 		}
 	});
 	MatchProperty("AutoGenerate", { reader >> m_AutoGenerate; });
 	MatchProperty("Resolution", { reader >> m_Resolution; });
 	MatchProperty("Depth", { reader >> m_Depth; });
-	MatchProperty("AddAtom", {
+	MatchProperty("_ClearAtoms", {
+		reader.ReadPropValue();
+		for (const Atom* atom: m_Atoms) {
+			delete atom;
+		}
+		m_Atoms.clear();
+	});
+	MatchForwards("AddAtom") MatchProperty("_AddAtom", {
 		Atom* atom = new Atom;
 		reader >> *atom;
 		m_Atoms.push_back(atom);
@@ -168,14 +178,8 @@ int AtomGroup::ReadProperty(const std::string_view& propName, Reader& reader) {
 int AtomGroup::Save(Writer& writer) const {
 	Entity::Save(writer);
 
-	writer.NewProperty("Material");
-	writer << m_Material;
-	writer.NewProperty("AutoGenerate");
-	writer << m_AutoGenerate;
-	writer.NewProperty("Resolution");
-	writer << m_Resolution;
-	writer.NewProperty("Depth");
-	writer << m_Depth;
+	writer.NewPropertyWithValue("Material", m_Material->GetEntityCharacteristic());
+	writer.NewPropertyWithValue("AutoGenerate", m_AutoGenerate);
 
 	// Only write out Atoms if they were manually specified
 	if (!m_AutoGenerate) {
@@ -183,17 +187,79 @@ int AtomGroup::Save(Writer& writer) const {
 			writer.NewProperty("AddAtom");
 			writer << *atom;
 		}
+	} else {
+		writer.NewPropertyWithValue("Resolution", m_Resolution);
+		writer.NewPropertyWithValue("Depth", m_Depth);
 	}
 
-	writer.NewProperty("JointOffset");
-	writer << m_JointOffset;
-
-	writer.NewProperty("AreaDistributionType");
-	writer << static_cast<std::underlying_type_t<AreaDistributionType>>(m_AreaDistributionType);
-	writer.NewProperty("AreaDistributionSurfaceAreaMultiplier");
-	writer << m_AreaDistributionSurfaceAreaMultiplier;
+	writer.NewPropertyWithValue("JointOffset", m_JointOffset);
+	writer.NewPropertyWithValue("AreaDistributionType", static_cast<std::underlying_type_t<AreaDistributionType>>(m_AreaDistributionType));
+	writer.NewPropertyWithValue("AreaDistributionSurfaceAreaMultiplier", m_AreaDistributionSurfaceAreaMultiplier);
 
 	return 0;
+}
+
+int AtomGroup::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	Entity::Write(writer, entityReference, hashData);
+
+	const AtomGroup& reference = static_cast<const AtomGroup&>(entityReference);
+
+	// TODO: A manual group's list includes its Attachables' atoms, which they add again when they're loaded, doubling them.
+	// Nothing shipped has a manual main group with Attachables left on it to reach this, but a mod could.
+
+
+	writer.NewPresetReferenceProperty("Material", m_Material, reference.m_Material);
+	writer.NewDistinctProperty("AutoGenerate", m_AutoGenerate, reference.m_AutoGenerate);
+
+	// Only write out Atoms if they were manually specified
+	if (!m_AutoGenerate) {
+		writer.NewPointerSequence("_ClearAtoms", "_AddAtom", m_Atoms, hashData);
+	} else {
+		writer.NewDistinctProperty("Resolution", m_Resolution, reference.m_Resolution);
+		writer.NewDistinctProperty("Depth", m_Depth, reference.m_Depth);
+	}
+
+	writer.NewDistinctProperty("JointOffset", m_JointOffset, reference.m_JointOffset);
+
+	if (m_AreaDistributionType != reference.m_AreaDistributionType) {
+		writer.NewPropertyWithValue("AreaDistributionType", static_cast<std::underlying_type_t<AreaDistributionType>>(m_AreaDistributionType));
+	}
+
+	writer.NewDistinctProperty("AreaDistributionSurfaceAreaMultiplier", m_AreaDistributionSurfaceAreaMultiplier, reference.m_AreaDistributionSurfaceAreaMultiplier);
+
+	return 0;
+}
+
+HashingData AtomGroup::Hash() const {
+	HashingData hashData(Entity::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	hash ^= RTE::Hash(m_Material->GetEntityCharacteristic()) << 0;
+	hash ^= static_cast<uint64_t>(m_AutoGenerate) << 1;
+
+	if (m_AutoGenerate) {
+		hashData.m_ParseValues.push_back(0);
+
+		hash ^= static_cast<uint64_t>(m_Resolution) << 2;
+		hash ^= static_cast<uint64_t>(m_Depth) << 3;
+	} else {
+		hashData.m_ParseValues.push_back(m_Atoms.size());
+
+		for (int i = 0; i < m_Atoms.size(); i++) {
+			uint64_t atomHash = m_Atoms.at(i)->Hash().m_Hash;
+			hashData.m_Constituents.push_back(atomHash);
+			hash ^= atomHash << (i % sizeof(uint64_t) * 8);
+		}
+	}
+
+	uint64_t jointHash = m_JointOffset.Hash().m_Hash;
+	hashData.m_Constituents.push_back(jointHash);
+	hash ^= jointHash << 2;
+
+	hash ^= static_cast<uint64_t>(m_AreaDistributionType) << 3;
+	hash ^= static_cast<uint64_t>(m_AreaDistributionSurfaceAreaMultiplier) << 4;
+
+	return hashData;
 }
 
 void AtomGroup::Destroy(bool notInherited) {

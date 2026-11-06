@@ -41,14 +41,25 @@ int ADSensor::ReadProperty(const std::string_view& propName, Reader& reader) {
 int ADSensor::Save(Writer& writer) const {
 	Serializable::Save(writer);
 
-	writer.NewProperty("StartOffset");
-	writer << m_StartOffset;
-	writer.NewProperty("SensorRay");
-	writer << m_SensorRay;
-	writer.NewProperty("SkipPixels");
-	writer << m_Skip;
+	if (!m_StartOffset.IsZero())
+		writer.NewPropertyWithValue("StartOffset", m_StartOffset);
+	if (!m_SensorRay.IsZero())
+		writer.NewPropertyWithValue("SensorRay", m_SensorRay);
+	if (m_Skip != 3)
+		writer.NewPropertyWithValue("SkipPixels", m_Skip);
 
 	return 0;
+}
+
+HashingData ADSensor::Hash() const {
+	HashingData hashData(Serializable::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	hash ^= m_StartOffset.Hash().m_Hash << 0;
+	hash ^= m_SensorRay.Hash().m_Hash << 1;
+	hash ^= static_cast<uint64_t>(m_Skip) << 2;
+
+	return hashData;
 }
 
 Actor* ADSensor::SenseActor(const Vector& doorPos, const Matrix& doorRot, bool doorHFlipped, MOID ignoreMOID) {

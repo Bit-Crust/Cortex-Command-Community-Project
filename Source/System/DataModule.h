@@ -143,6 +143,12 @@ namespace RTE {
 		/// @return The file path of the data file that the specified Entity was read from. If no Entity of that description was found, "" is returned.
 		std::string GetEntityDataLocation(const std::string& exactType, const std::string& instance);
 
+		/// Gets the data file path of a previously read in (defined) Entity.
+		/// @param exactType The type name of the derived Entity. Ownership is NOT transferred!
+		/// @param instance The instance name of the derived Entity instance.
+		/// @return The file path of the data file that the specified Entity was read from. If no Entity of that description was found, "" is returned.
+		const HashingData* GetEntityHash(const std::string& exactType, const std::string& instance);
+
 		/// Gets a previously read in (defined) Entity, by exact type and instance name. Ownership is NOT transferred!
 		/// @param exactType The exact type name of the derived Entity instance to get.
 		/// @param instance The instance name of the derived Entity instance.
@@ -235,10 +241,11 @@ namespace RTE {
 		struct PresetEntry {
 			/// Constructor method used to instantiate a PresetEntry object in system memory.
 			PresetEntry(Entity* preset, const std::string& file) :
-			    m_EntityPreset(preset), m_FileReadFrom(file) {}
+			    m_EntityPreset(preset), m_FileReadFrom(file), m_Hash(preset->Hash()) {}
 
 			Entity* m_EntityPreset; //!< Owned by this.
 			std::string m_FileReadFrom; //!< Where the instance was read from.
+			HashingData m_Hash; //!< The hash of the preset for later comparison.
 		};
 
 		bool m_IsUserdata; //!< Whether this DataModule contains userdata written by the game (e.g saved games or editor scenes), meaning it is not an official nor a 3rd party module and is ignored anywhere where that is relevant.

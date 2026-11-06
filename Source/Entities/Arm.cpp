@@ -119,6 +119,49 @@ int Arm::Save(Writer& writer) const {
 	return 0;
 }
 
+int Arm::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	Attachable::Write(writer, entityReference, hashData);
+
+	const Arm& reference = static_cast<const Arm&>(entityReference);
+
+	writer.NewDistinctProperty("MaxLength", m_MaxLength, reference.m_MaxLength);
+	writer.NewDistinctProperty("MoveSpeed", m_MoveSpeed, reference.m_MoveSpeed);
+	writer.NewDistinctProperty("HandIdleOffset", m_HandIdleOffset, reference.m_HandIdleOffset);
+	writer.NewDistinctHashedProperty("HandSprite", m_HandSpriteFile, hashData);
+	writer.NewDistinctProperty("GripStrength", m_GripStrength, reference.m_GripStrength);
+	writer.NewDistinctProperty("ThrowStrength", m_ThrowStrength, reference.m_ThrowStrength);
+	writer.NewOptionalEntityPointerProperty("HeldDevice", m_HeldDevice, hashData);
+
+	return 0;
+}
+
+HashingData Arm::Hash() const {
+	HashingData hashData(Attachable::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	hash ^= static_cast<uint64_t>(m_MaxLength) << 1;
+	hash ^= static_cast<uint64_t>(m_MoveSpeed) << 2;
+
+	hash ^= m_HandIdleOffset.Hash().m_Hash << 3;
+
+	uint64_t handSpriteHash = m_HandSpriteFile.Hash().m_Hash;
+	hashData.m_Constituents.push_back(handSpriteHash);
+	hash ^= handSpriteHash << 4;
+
+	hash ^= static_cast<uint64_t>(m_GripStrength) << 5;
+	hash ^= static_cast<uint64_t>(m_ThrowStrength) << 6;
+
+	bool heldDeviceDef = m_HeldDevice != nullptr;
+	hashData.m_ParseValues.push_back(heldDeviceDef);
+	if (heldDeviceDef) {
+		uint64_t heldDeviceHash = m_HeldDevice->Hash().m_Hash;
+		hashData.m_Constituents.push_back(heldDeviceHash);
+		hash ^= heldDeviceHash << 7;
+	}
+
+	return hashData;
+}
+
 void Arm::SetHandPos(const Vector& newHandPos) {
 	SetHandCurrentOffset(g_SceneMan.ShortestDistance(m_JointPos, newHandPos, g_SceneMan.SceneWrapsX() || g_SceneMan.SceneWrapsY()));
 }

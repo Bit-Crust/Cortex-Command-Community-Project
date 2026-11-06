@@ -150,7 +150,7 @@ int SettingsMan::ReadProperty(const std::string_view& propName, Reader& reader) 
 	MatchProperty("UnheldItemsHUDDisplayRange", { SetUnheldItemsHUDDisplayRange(std::stof(reader.ReadPropValue())); });
 	MatchProperty("AlwaysDisplayUnheldItemsInStrategicMode", { reader >> m_AlwaysDisplayUnheldItemsInStrategicMode; });
 	MatchProperty("SubPieMenuHoverOpenDelay", { reader >> m_SubPieMenuHoverOpenDelay; });
-	MatchProperty("EndlessMode", { reader >> m_EndlessMetaGameMode; });
+	MatchForwards("EndlessMode") MatchProperty("EndlessMetaGameMode", { reader >> m_EndlessMetaGameMode; });
 	MatchProperty("EnableCrabBombs", { reader >> m_EnableCrabBombs; });
 	MatchProperty("CrabBombThreshold", { reader >> m_CrabBombThreshold; });
 	MatchProperty("ShowEnemyHUD", { reader >> m_ShowEnemyHUD; });
@@ -414,4 +414,9 @@ int SettingsMan::Save(Writer& writer) const {
 	writer.ObjectEnd();
 
 	return 0;
+}
+
+HashingData SettingsMan::Hash() const {
+	// Nothing compares this against a preset, so there's nothing to hash.
+	return Serializable::Hash();
 }

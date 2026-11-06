@@ -146,6 +146,57 @@ int PieSlice::Save(Writer& writer) const {
 	return 0;
 }
 
+int PieSlice::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	Entity::Write(writer, entityReference, hashData);
+
+	const PieSlice& reference = static_cast<const PieSlice&>(entityReference);
+
+	if (m_Type != reference.m_Type) {
+		writer.NewPropertyWithValue("Type", static_cast<int>(m_Type));
+	}
+	if (m_Direction != reference.m_Direction) {
+		writer.NewPropertyWithValue("Direction", static_cast<int>(m_Direction));
+	}
+
+	writer.NewDistinctProperty("Enabled", m_Enabled, reference.m_Enabled);
+	writer.NewDistinctHashedProperty("Icon", *m_Icon, hashData);
+
+	if (m_LuabindFunctionObject && !m_FunctionName.empty()) {
+		writer.NewPropertyWithValue("ScriptPath", m_LuabindFunctionObject->GetFilePath());
+		writer.NewPropertyWithValue("FunctionName", m_FunctionName);
+	}
+
+	writer.NewOptionalEntityPointerProperty("SubPieMenu", m_SubPieMenu.get(), hashData);
+
+	return 0;
+}
+
+HashingData PieSlice::Hash() const {
+	HashingData hashData(Entity::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	hash ^= static_cast<uint64_t>(m_Type) << 1;
+	hash ^= static_cast<uint64_t>(m_Direction) << 1;
+	hash ^= static_cast<uint64_t>(m_Enabled) << 2;
+
+	uint64_t bitmapHash = m_Icon->Hash().m_Hash;
+	hashData.m_Constituents.push_back(bitmapHash);
+	hash ^= bitmapHash << 3;
+
+	hash ^= (m_LuabindFunctionObject ? RTE::Hash(m_LuabindFunctionObject->GetFilePath()) : 0) << 4;
+	hash ^= RTE::Hash(m_FunctionName) << 5;
+
+	bool subPieMenuDef = m_SubPieMenu != nullptr;
+	hashData.m_ParseValues.push_back(subPieMenuDef);
+	if (subPieMenuDef) {
+		uint64_t subPieHash = m_SubPieMenu->Hash().m_Hash;
+		hashData.m_Constituents.push_back(subPieHash);
+		hash ^= subPieHash << 6;
+	}
+
+	return hashData;
+}
+
 BITMAP* PieSlice::GetAppropriateIcon(bool sliceIsSelected) const {
 	if (int iconFrameCount = m_Icon->GetFrameCount(); iconFrameCount > 0) {
 		if (!IsEnabled() && iconFrameCount > 2) {

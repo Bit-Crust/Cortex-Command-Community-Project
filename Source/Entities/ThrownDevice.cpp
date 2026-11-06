@@ -65,7 +65,15 @@ int ThrownDevice::ReadProperty(const std::string_view& propName, Reader& reader)
 	MatchProperty("MaxThrowVel", { reader >> m_MaxThrowVel; });
 	MatchProperty("TriggerDelay", { reader >> m_TriggerDelay; });
 	MatchProperty("ActivatesWhenReleased", { reader >> m_ActivatesWhenReleased; });
-	MatchProperty("StrikerLever", { m_StrikerLever = dynamic_cast<const MovableObject*>(g_PresetMan.GetEntityPreset(reader)); });
+	MatchProperty("StrikerLever", {
+		const Entity* entityReference = g_PresetMan.GetEntityPresetFromCharacteristic(reader);
+		const MovableObject* reference = dynamic_cast<const MovableObject*>(entityReference);
+		if (entityReference == nullptr || reference != nullptr) {
+			m_StrikerLever = reference;
+		} else {
+			reader.ReportError("Tried to point StrikerLever to a non-MovableObject type!");
+		}
+	});
 
 	EndPropertyList;
 }
@@ -73,24 +81,56 @@ int ThrownDevice::ReadProperty(const std::string_view& propName, Reader& reader)
 int ThrownDevice::Save(Writer& writer) const {
 	HeldDevice::Save(writer);
 
-	writer.NewProperty("ActivationSound");
-	writer << *m_ActivationSound;
-	writer.NewProperty("StartThrowOffset");
-	writer << m_StartThrowOffset;
-	writer.NewProperty("EndThrowOffset");
-	writer << m_EndThrowOffset;
-	writer.NewProperty("MinThrowVel");
-	writer << m_MinThrowVel;
-	writer.NewProperty("MaxThrowVel");
-	writer << m_MaxThrowVel;
-	writer.NewProperty("TriggerDelay");
-	writer << m_TriggerDelay;
-	writer.NewProperty("ActivatesWhenReleased");
-	writer << m_ActivatesWhenReleased;
-	writer.NewProperty("StrikerLever");
-	writer << m_StrikerLever;
+	writer.NewPropertyWithValue("ActivationSound", *m_ActivationSound);
+	writer.NewPropertyWithValue("StartThrowOffset", m_StartThrowOffset);
+	writer.NewPropertyWithValue("EndThrowOffset", m_EndThrowOffset);
+	writer.NewPropertyWithValue("MinThrowVel", m_MinThrowVel);
+	writer.NewPropertyWithValue("MaxThrowVel", m_MaxThrowVel);
+	writer.NewPropertyWithValue("TriggerDelay", m_TriggerDelay);
+	writer.NewPropertyWithValue("ActivatesWhenReleased", m_ActivatesWhenReleased);
+	writer.NewPresetReferenceProperty("StrikerLever", m_StrikerLever, static_cast<const MovableObject*>(nullptr));
 
 	return 0;
+}
+
+int ThrownDevice::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	HeldDevice::Write(writer, entityReference, hashData);
+
+	const ThrownDevice& reference = static_cast<const ThrownDevice&>(entityReference);
+
+	writer.NewOptionalEntityPointerProperty("ActivationSound", m_ActivationSound.get(), hashData);
+	writer.NewDistinctProperty("StartThrowOffset", m_StartThrowOffset, reference.m_StartThrowOffset);
+	writer.NewDistinctProperty("EndThrowOffset", m_EndThrowOffset, reference.m_EndThrowOffset);
+	writer.NewDistinctProperty("MinThrowVel", m_MinThrowVel, reference.m_MinThrowVel);
+	writer.NewDistinctProperty("MaxThrowVel", m_MaxThrowVel, reference.m_MaxThrowVel);
+	writer.NewDistinctProperty("TriggerDelay", m_TriggerDelay, reference.m_TriggerDelay);
+	writer.NewDistinctProperty("ActivatesWhenReleased", m_ActivatesWhenReleased, reference.m_ActivatesWhenReleased);
+	writer.NewPresetReferenceProperty("StrikerLever", m_StrikerLever, reference.m_StrikerLever);
+
+	return 0;
+}
+
+HashingData ThrownDevice::Hash() const {
+	HashingData hashData(HeldDevice::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	bool activationSoundDef = m_ActivationSound != nullptr;
+	hashData.m_ParseValues.push_back(activationSoundDef);
+	if (activationSoundDef) {
+		uint64_t activationSoundHash = m_ActivationSound->Hash().m_Hash;
+		hashData.m_Constituents.push_back(activationSoundHash);
+		hash ^= activationSoundHash << 1;
+	}
+
+	hash ^= m_StartThrowOffset.Hash().m_Hash << 2;
+	hash ^= m_EndThrowOffset.Hash().m_Hash << 3;
+	hash ^= static_cast<uint64_t>(m_MinThrowVel) << 4;
+	hash ^= static_cast<uint64_t>(m_MaxThrowVel) << 5;
+	hash ^= static_cast<uint64_t>(m_TriggerDelay) << 6;
+	hash ^= static_cast<uint64_t>(m_ActivatesWhenReleased) << 7;
+	hash ^= (m_StrikerLever ? RTE::Hash(m_StrikerLever->GetEntityCharacteristic()) : 0) << 8;
+
+	return hashData;
 }
 
 float ThrownDevice::GetCalculatedMaxThrowVelIncludingArmThrowStrength() {

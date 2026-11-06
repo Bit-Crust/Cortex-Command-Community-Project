@@ -267,22 +267,18 @@ int MOSRotating::Create(const MOSRotating& reference) {
 int MOSRotating::ReadProperty(const std::string_view& propName, Reader& reader) {
 	StartPropertyList(return MOSprite::ReadProperty(propName, reader));
 
-	MatchProperty("AtomGroup",
-	              {
-		              delete m_pAtomGroup;
-		              m_pAtomGroup = new AtomGroup();
-		              reader >> *m_pAtomGroup;
-	              });
-	MatchProperty("DeepGroup",
-	              {
-		              delete m_pDeepGroup;
-		              m_pDeepGroup = new AtomGroup();
-		              reader >> *m_pDeepGroup;
-	              });
+	MatchProperty("AtomGroup", {
+		delete m_pAtomGroup;
+		m_pAtomGroup = g_PresetMan.ReadReflectedPresetOfType<AtomGroup>(reader, propName);
+	});
+	MatchProperty("DeepGroup", {
+		delete m_pDeepGroup;
+		m_pDeepGroup = g_PresetMan.ReadReflectedPresetOfType<AtomGroup>(reader, propName);
+	});
 	MatchProperty("DeepCheck", { reader >> m_DeepCheck; });
 	MatchProperty("OrientToVel", { reader >> m_OrientToVel; });
 	MatchProperty("SpecialBehaviour_ClearAllAttachables", {
-		// This special property is used to make Attachables work with our limited serialization system, when saving the game. Note that we discard the property value here, because all that matters is whether or not we have the property.
+		// The older way of saving removes every Attachable, and then gives the hardcoded ones again through their own properties.
 		reader.ReadPropValue();
 		for (auto attachableIterator = m_Attachables.begin(); attachableIterator != m_Attachables.end();) {
 			Attachable* attachable = *attachableIterator;
@@ -290,7 +286,18 @@ int MOSRotating::ReadProperty(const std::string_view& propName, Reader& reader) 
 			delete RemoveAttachable(attachable);
 		}
 	});
-	MatchForwards("AddAttachable") MatchForwards("AddAEmitter") MatchProperty("AddEmitter", {
+	MatchProperty("_ClearAttachables", {
+		// Only what _AddAttachable gives back is removed. Hardcoded Attachables have their own properties, which are only written when they differ from the preset's.
+		reader.ReadPropValue();
+		for (auto attachableIterator = m_Attachables.begin(); attachableIterator != m_Attachables.end();) {
+			Attachable* attachable = *attachableIterator;
+			++attachableIterator;
+			if (!AttachableIsHardcoded(attachable)) {
+				delete RemoveAttachable(attachable);
+			}
+		}
+	});
+	MatchForwards("AddAttachable") MatchForwards("AddAEmitter") MatchForwards("AddEmitter") MatchProperty("_AddAttachable", {
 		Entity* readerEntity = g_PresetMan.ReadReflectedPreset(reader);
 		if (Attachable* readerAttachable = dynamic_cast<Attachable*>(readerEntity)) {
 			AddAttachable(readerAttachable);
@@ -298,17 +305,29 @@ int MOSRotating::ReadProperty(const std::string_view& propName, Reader& reader) 
 			reader.ReportError("Tried to AddAttachable a non-Attachable type!");
 		}
 	});
-	MatchProperty("SpecialBehaviour_AddWound", {
-		AEmitter* wound = new AEmitter;
-		reader >> wound;
-		AddWound(wound, wound->GetParentOffset());
+	MatchProperty("_ClearWounds", {
+		reader.ReadPropValue();
+		RemoveWounds(GetWoundCount());
 	});
-	MatchProperty("AddGib",
-	              {
-		              Gib* gib = new Gib();
-		              reader >> *gib;
-		              m_Gibs.push_back(gib);
-	              });
+	MatchForwards("SpecialBehaviour_AddWound") MatchProperty("_AddWound", {
+		Entity* readerEntity = g_PresetMan.ReadReflectedPreset(reader);
+		if (AEmitter* readerWound = dynamic_cast<AEmitter*>(readerEntity)) {
+			AddWound(readerWound, readerWound->GetParentOffset());
+		} else {
+			reader.ReportError("Tried to AddWound a non-AEmitter (which is the type of a wound) type!");
+		}
+	});
+	MatchProperty("_ClearGibs", { 
+		reader.ReadPropValue();
+		for (Gib* gib: m_Gibs)
+			delete gib;
+		m_Gibs.clear(); 
+	});
+	MatchForwards("AddGib") MatchProperty("_AddGib", {
+		Gib* gib = new Gib();
+		reader >> *gib;
+		m_Gibs.push_back(gib);
+	});
 	MatchProperty("GibImpulseLimit", { reader >> m_GibImpulseLimit; });
 	MatchForwards("GibWoundLimit") MatchProperty("WoundLimit", { reader >> m_GibWoundLimit; });
 	MatchProperty("GibBlastStrength", { reader >> m_GibBlastStrength; });
@@ -317,16 +336,17 @@ int MOSRotating::ReadProperty(const std::string_view& propName, Reader& reader) 
 	MatchProperty("DetachAttachablesBeforeGibbingFromWounds", { reader >> m_DetachAttachablesBeforeGibbingFromWounds; });
 	MatchProperty("GibAtEndOfLifetime", { reader >> m_GibAtEndOfLifetime; });
 	MatchProperty("GibSound", {
-		if (!m_GibSound) {
-			m_GibSound = new SoundContainer;
-		}
-		reader >> m_GibSound;
+		delete m_GibSound;
+		m_GibSound = g_PresetMan.ReadReflectedPresetOfType<SoundContainer>(reader, propName);
 	});
 	MatchProperty("EffectOnGib", { reader >> m_EffectOnGib; });
 	MatchProperty("LoudnessOnGib", { reader >> m_LoudnessOnGib; });
 	MatchProperty("DamageMultiplier", {
 		reader >> m_DamageMultiplier;
 		m_NoSetDamageMultiplier = false;
+	});
+	MatchProperty("_NoSetDamageMultiplier", {
+		reader >> m_NoSetDamageMultiplier;
 	});
 
 	EndPropertyList;
@@ -335,44 +355,149 @@ int MOSRotating::ReadProperty(const std::string_view& propName, Reader& reader) 
 int MOSRotating::Save(Writer& writer) const {
 	MOSprite::Save(writer);
 
-	// TODO: Make proper save system that knows not to save redundant data!
-	/*
-	    writer.NewProperty("AtomGroup");
-	    writer << m_pAtomGroup;
-	    writer.NewProperty("DeepGroup");
-	    writer << m_pDeepGroup;
-	    writer.NewProperty("DeepCheck");
-	    writer << m_DeepCheck;
-	    writer.NewProperty("OrientToVel");
-	    writer << m_OrientToVel;
+	writer.NewProperty("AtomGroup");
+	writer << m_pAtomGroup;
+	writer.NewProperty("DeepGroup");
+	writer << m_pDeepGroup;
+	writer.NewProperty("DeepCheck");
+	writer << m_DeepCheck;
+	writer.NewProperty("OrientToVel");
+	writer << m_OrientToVel;
 
-	    for (auto itr = m_Wounds.begin(); itr != m_Wounds.end(); ++itr)
-	    {
-	        writer.NewProperty("AddEmitter");
-	        writer << (*itr);
-	    }
-	    for (auto aItr = m_Attachables.begin(); aItr != m_Attachables.end(); ++aItr)
-	    {
-	        writer.NewProperty("AddAttachable");
-	        writer << (*aItr);
-	    }
-	*/
+	for (auto itr = m_Wounds.begin(); itr != m_Wounds.end(); ++itr)
+	{
+	    writer.NewProperty("AddEmitter");
+	    writer << (*itr);
+	}
+
+	for (auto aItr = m_Attachables.begin(); aItr != m_Attachables.end(); ++aItr)
+	{
+	    writer.NewProperty("AddAttachable");
+	    writer << (*aItr);
+	}
+	
 	for (auto gItr = m_Gibs.begin(); gItr != m_Gibs.end(); ++gItr) {
 		writer.NewProperty("AddGib");
 		writer << (**gItr);
 	}
-	/*
-	    writer.NewProperty("GibImpulseLimit");
-	    writer << m_GibImpulseLimit;
-	    writer.NewProperty("GibWoundLimit");
-	    writer << m_GibWoundLimit;
-	    writer.NewPropertyWithValue("GibAtEndOfLifetime", m_GibAtEndOfLifetime);
-	    writer.NewProperty("GibSound");
-	    writer << m_GibSound;
-	    writer.NewProperty("EffectOnGib");
-	    writer << m_EffectOnGib;
-	*/
+
+	writer.NewProperty("GibImpulseLimit");
+	writer << m_GibImpulseLimit;
+	writer.NewPropertyWithValue("GibWoundLimit", m_GibWoundLimit);
+	writer.NewPropertyWithValue("GibAtEndOfLifetime", m_GibAtEndOfLifetime);
+
+	/* if (m_GibSound != nullptr) {
+		writer.NewProperty("GibSound");
+
+		if (const SoundContainer* gibSoundPreset = static_cast<const SoundContainer*>(m_GibSound->GetPreset())) {
+			m_GibSound->Write(writer, *gibSoundPreset, *g_PresetMan.GetEntityHash("SoundContainer", m_GibSound->GetPresetName(), m_GibSound->GetModuleID()));
+			writer.ObjectEnd();
+		} else {
+			writer << m_GibSound;
+		}
+	}*/
+
+	writer.NewProperty("EffectOnGib");
+	writer << m_EffectOnGib;
+
 	return 0;
+}
+
+int MOSRotating::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	MOSprite::Write(writer, entityReference, hashData);
+
+	const MOSRotating& reference = static_cast<const MOSRotating&>(entityReference);
+
+	writer.NewOptionalEntityPointerProperty("AtomGroup", m_pAtomGroup, hashData);
+	writer.NewOptionalEntityPointerProperty("DeepGroup", m_pDeepGroup, hashData);
+	writer.NewDistinctProperty("DeepCheck", m_DeepCheck, reference.m_DeepCheck);
+	writer.NewDistinctProperty("OrientToVel", m_OrientToVel, reference.m_OrientToVel);
+	writer.NewPointerSequence("_ClearWounds", "_AddWound", m_Wounds, hashData);
+	writer.NewPointerSequenceConditional("_ClearAttachables", "_AddAttachable", m_Attachables, hashData, [&](const Attachable* ptr) {
+		return !AttachableIsHardcoded(ptr);
+	});
+	writer.NewPointerSequence("_ClearGibs", "_AddGib", m_Gibs, hashData);
+	writer.NewDistinctProperty("GibImpulseLimit", m_GibImpulseLimit, reference.m_GibImpulseLimit);
+	writer.NewDistinctProperty("GibWoundLimit", m_GibWoundLimit, reference.m_GibWoundLimit);
+	writer.NewDistinctProperty("GibAtEndOfLifetime", m_GibAtEndOfLifetime, reference.m_GibAtEndOfLifetime);
+	writer.NewOptionalEntityPointerProperty("GibSound", m_GibSound, hashData);
+	writer.NewDistinctProperty("EffectOnGib", m_EffectOnGib, reference.m_EffectOnGib);
+	writer.NewDistinctProperty("DamageMultiplier", m_DamageMultiplier, reference.m_DamageMultiplier);
+	writer.NewDistinctProperty("_NoSetDamageMultiplier", m_NoSetDamageMultiplier, reference.m_NoSetDamageMultiplier);
+
+	return 0;
+}
+
+HashingData MOSRotating::Hash() const {
+	HashingData hashData(MOSprite::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	bool atomGroupDef = m_pAtomGroup != nullptr;
+	hashData.m_ParseValues.push_back(atomGroupDef);
+	if (atomGroupDef) {
+		uint64_t atomGroupHash = m_pAtomGroup->Hash().m_Hash;
+		hashData.m_Constituents.push_back(atomGroupHash);
+		hash ^= atomGroupHash << 1;
+	}
+
+	bool deepGroupDef = m_pDeepGroup != nullptr;
+	hashData.m_ParseValues.push_back(deepGroupDef);
+	if (deepGroupDef) {
+		uint64_t deepGroupHash = m_pDeepGroup->Hash().m_Hash;
+		hashData.m_Constituents.push_back(deepGroupHash);
+		hash ^= deepGroupHash << 2;
+	}
+
+	hash ^= static_cast<uint64_t>(m_DeepCheck) << 3;
+	hash ^= static_cast<uint64_t>(m_OrientToVel) << 4;
+
+	int i = 0;
+
+	for (auto itr = m_Wounds.begin(); itr != m_Wounds.end(); ++itr) {
+		uint64_t woundHash = (*itr)->Hash().m_Hash;
+		hashData.m_Constituents.push_back(woundHash);
+		hash ^= woundHash << (i++ % sizeof(uint64_t) * 8);
+	}
+
+	hashData.m_ParseValues.push_back(i);
+
+	i = 0;
+
+	for (auto aItr = m_Attachables.begin(); aItr != m_Attachables.end(); ++aItr) {
+		if (!AttachableIsHardcoded(*aItr)) {
+			uint64_t attachableHash = (*aItr)->Hash().m_Hash;
+			hashData.m_Constituents.push_back(attachableHash);
+			hash ^= attachableHash << (i++ % sizeof(uint64_t) * 8);
+		}
+	}
+
+	hashData.m_ParseValues.push_back(i);
+
+	i = 0;
+
+	for (auto gItr = m_Gibs.begin(); gItr != m_Gibs.end(); ++gItr) {
+		uint64_t gibHash = (*gItr)->Hash().m_Hash;
+		hashData.m_Constituents.push_back(gibHash);
+		hash ^= gibHash << (i++ % sizeof(uint64_t) * 8);
+	}
+
+	hashData.m_ParseValues.push_back(i);
+
+	hash ^= static_cast<uint64_t>(m_GibImpulseLimit) << 5;
+	hash ^= static_cast<uint64_t>(m_GibWoundLimit) << 6;
+	hash ^= static_cast<uint64_t>(m_GibAtEndOfLifetime) << 7;
+
+	bool gibSoundDef = m_GibSound != nullptr;
+	hashData.m_ParseValues.push_back(gibSoundDef);
+	if (gibSoundDef) {
+		uint64_t gibSoundHash = m_GibSound->Hash().m_Hash;
+		hashData.m_Constituents.push_back(gibSoundHash);
+		hash ^= gibSoundHash << 8;
+	}
+
+	hash ^= static_cast<uint64_t>(m_EffectOnGib) << 9;
+
+	return hashData;
 }
 
 int MOSRotating::GetGibWoundLimit(bool includePositiveDamageAttachables, bool includeNegativeDamageAttachables, bool includeNoDamageAttachables) const {

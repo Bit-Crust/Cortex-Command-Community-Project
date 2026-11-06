@@ -95,17 +95,18 @@ int EditorActivity::Create(const EditorActivity& reference) {
 
 int EditorActivity::ReadProperty(const std::string_view& propName, Reader& reader) {
 	StartPropertyList(Activity::ReadProperty(propName, reader));
-	/*
-	    MatchProperty("CPUTeam", { reader >> m_CPUTeam; });
-	    MatchProperty("Difficulty", { reader >> m_Difficulty; });
-	    MatchProperty("DeliveryDelay", { reader >> m_DeliveryDelay; });
-	*/
+
 	EndPropertyList;
 }
 
 int EditorActivity::Save(Writer& writer) const {
 	Activity::Save(writer);
 	return 0;
+}
+
+HashingData EditorActivity::Hash() const {
+	// If we don't save any distinguishing characteristics, at all, then this may as well be
+	return Activity::Hash();
 }
 
 void EditorActivity::Destroy(bool notInherited) {

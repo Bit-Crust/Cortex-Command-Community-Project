@@ -263,42 +263,50 @@ int ACrab::ReadProperty(const std::string_view& propName, Reader& reader) {
 	MatchForwards("LFGFootGroup") MatchProperty("LeftFGFootGroup", {
 		delete m_pLFGFootGroup;
 		delete m_BackupLFGFootGroup;
-		m_pLFGFootGroup = new AtomGroup();
-		reader >> m_pLFGFootGroup;
-		m_pLFGFootGroup->SetOwner(this);
-		m_BackupLFGFootGroup = new AtomGroup(*m_pLFGFootGroup);
-		m_BackupLFGFootGroup->RemoveAllAtoms();
+		m_pLFGFootGroup = g_PresetMan.ReadReflectedPresetOfType<AtomGroup>(reader, propName);
+		m_BackupLFGFootGroup = nullptr;
+		if (m_pLFGFootGroup) {
+			m_pLFGFootGroup->SetOwner(this);
+			m_BackupLFGFootGroup = new AtomGroup(*m_pLFGFootGroup);
+			m_BackupLFGFootGroup->RemoveAllAtoms();
+		}
 	});
 	MatchForwards("LBGFootGroup") MatchProperty("LeftBGFootGroup", {
 		delete m_pLBGFootGroup;
 		delete m_BackupLBGFootGroup;
-		m_pLBGFootGroup = new AtomGroup();
-		reader >> m_pLBGFootGroup;
-		m_pLBGFootGroup->SetOwner(this);
-		m_BackupLBGFootGroup = new AtomGroup(*m_pLBGFootGroup);
-		m_BackupLBGFootGroup->RemoveAllAtoms();
+		m_pLBGFootGroup = g_PresetMan.ReadReflectedPresetOfType<AtomGroup>(reader, propName);
+		m_BackupLBGFootGroup = nullptr;
+		if (m_pLBGFootGroup) {
+			m_pLBGFootGroup->SetOwner(this);
+			m_BackupLBGFootGroup = new AtomGroup(*m_pLBGFootGroup);
+			m_BackupLBGFootGroup->RemoveAllAtoms();
+		}
 	});
 	MatchForwards("RFGFootGroup") MatchProperty("RightFGFootGroup", {
 		delete m_pRFGFootGroup;
 		delete m_BackupRFGFootGroup;
-		m_pRFGFootGroup = new AtomGroup();
-		reader >> m_pRFGFootGroup;
-		m_pRFGFootGroup->SetOwner(this);
-		m_BackupRFGFootGroup = new AtomGroup(*m_pRFGFootGroup);
-		m_BackupRFGFootGroup->RemoveAllAtoms();
+		m_pRFGFootGroup = g_PresetMan.ReadReflectedPresetOfType<AtomGroup>(reader, propName);
+		m_BackupRFGFootGroup = nullptr;
+		if (m_pRFGFootGroup) {
+			m_pRFGFootGroup->SetOwner(this);
+			m_BackupRFGFootGroup = new AtomGroup(*m_pRFGFootGroup);
+			m_BackupRFGFootGroup->RemoveAllAtoms();
+		}
 	});
 	MatchForwards("RBGFootGroup") MatchProperty("RightBGFootGroup", {
 		delete m_pRBGFootGroup;
 		delete m_BackupRBGFootGroup;
-		m_pRBGFootGroup = new AtomGroup();
-		reader >> m_pRBGFootGroup;
-		m_pRBGFootGroup->SetOwner(this);
-		m_BackupRBGFootGroup = new AtomGroup(*m_pRBGFootGroup);
-		m_BackupRBGFootGroup->RemoveAllAtoms();
+		m_pRBGFootGroup = g_PresetMan.ReadReflectedPresetOfType<AtomGroup>(reader, propName);
+		m_BackupRBGFootGroup = nullptr;
+		if (m_pRBGFootGroup) {
+			m_pRBGFootGroup->SetOwner(this);
+			m_BackupRBGFootGroup = new AtomGroup(*m_pRBGFootGroup);
+			m_BackupRBGFootGroup->RemoveAllAtoms();
+		}
 	});
 	MatchProperty("StrideSound", {
-		m_StrideSound = new SoundContainer;
-		reader >> m_StrideSound;
+		delete m_StrideSound;
+		m_StrideSound = g_PresetMan.ReadReflectedPresetOfType<SoundContainer>(reader, propName);
 	});
 	MatchForwards("LStandLimbPath") MatchProperty("LeftStandLimbPath", { reader >> m_Paths[LEFTSIDE][FGROUND][STAND]; });
 	MatchForwards("LWalkLimbPath") MatchProperty("LeftWalkLimbPath", { reader >> m_Paths[LEFTSIDE][FGROUND][WALK]; });
@@ -316,50 +324,182 @@ int ACrab::ReadProperty(const std::string_view& propName, Reader& reader) {
 int ACrab::Save(Writer& writer) const {
 	Actor::Save(writer);
 
-	writer.NewProperty("Turret");
-	writer << m_pTurret;
-	writer.NewProperty("Jetpack");
-	writer << m_pJetpack;
-	writer.NewProperty("LFGLeg");
-	writer << m_pLFGLeg;
-	writer.NewProperty("LBGLeg");
-	writer << m_pLBGLeg;
-	writer.NewProperty("RFGLeg");
-	writer << m_pRFGLeg;
-	writer.NewProperty("RBGLeg");
-	writer << m_pRBGLeg;
-	writer.NewProperty("LFGFootGroup");
-	writer << m_pLFGFootGroup;
-	writer.NewProperty("LBGFootGroup");
-	writer << m_pLBGFootGroup;
-	writer.NewProperty("RFGFootGroup");
-	writer << m_pRFGFootGroup;
-	writer.NewProperty("RBGFootGroup");
-	writer << m_pRBGFootGroup;
-	writer.NewProperty("StrideSound");
-	writer << m_StrideSound;
+	writer.NewPropertyWithValue("Turret", m_pTurret);
+	writer.NewPropertyWithValue("Jetpack", m_pJetpack);
+	writer.NewPropertyWithValue("LFGLeg", m_pLFGLeg);
+	writer.NewPropertyWithValue("LBGLeg", m_pLBGLeg);
+	writer.NewPropertyWithValue("RFGLeg", m_pRFGLeg);
+	writer.NewPropertyWithValue("RBGLeg", m_pRBGLeg);
+	writer.NewPropertyWithValue("LFGFootGroup", m_pLFGFootGroup);
+	writer.NewPropertyWithValue("LBGFootGroup", m_pLBGFootGroup);
+	writer.NewPropertyWithValue("RFGFootGroup", m_pRFGFootGroup);
+	writer.NewPropertyWithValue("RBGFootGroup", m_pRBGFootGroup);
+	writer.NewPropertyWithValue("StrideSound", m_StrideSound);
 
-	writer.NewProperty("LStandLimbPath");
-	writer << m_Paths[LEFTSIDE][FGROUND][STAND];
-	writer.NewProperty("LWalkLimbPath");
-	writer << m_Paths[LEFTSIDE][FGROUND][WALK];
-	writer.NewProperty("LDislodgeLimbPath");
-	writer << m_Paths[LEFTSIDE][FGROUND][DISLODGE];
-	writer.NewProperty("RStandLimbPath");
-	writer << m_Paths[RIGHTSIDE][FGROUND][STAND];
-	writer.NewProperty("RWalkLimbPath");
-	writer << m_Paths[RIGHTSIDE][FGROUND][WALK];
-	writer.NewProperty("RDislodgeLimbPath");
-	writer << m_Paths[RIGHTSIDE][FGROUND][DISLODGE];
+	writer.NewPropertyWithValue("LStandLimbPath", m_Paths[LEFTSIDE][FGROUND][STAND]);
+	writer.NewPropertyWithValue("LWalkLimbPath", m_Paths[LEFTSIDE][FGROUND][WALK]);
+	writer.NewPropertyWithValue("LDislodgeLimbPath", m_Paths[LEFTSIDE][FGROUND][DISLODGE]);
+	writer.NewPropertyWithValue("RStandLimbPath", m_Paths[RIGHTSIDE][FGROUND][STAND]);
+	writer.NewPropertyWithValue("RWalkLimbPath", m_Paths[RIGHTSIDE][FGROUND][WALK]);
+	writer.NewPropertyWithValue("RDislodgeLimbPath", m_Paths[RIGHTSIDE][FGROUND][DISLODGE]);
 
-	writer.NewProperty("AimRangeUpperLimit");
-	writer << m_AimRangeUpperLimit;
-	writer.NewProperty("AimRangeLowerLimit");
-	writer << m_AimRangeLowerLimit;
-	writer.NewProperty("LockMouseAimInput");
-	writer << m_LockMouseAimInput;
+	writer.NewPropertyWithValue("AimRangeUpperLimit", m_AimRangeUpperLimit);
+	writer.NewPropertyWithValue("AimRangeLowerLimit", m_AimRangeLowerLimit);
+	writer.NewPropertyWithValue("LockMouseAimInput", m_LockMouseAimInput);
 
 	return 0;
+}
+
+int ACrab::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	Actor::Write(writer, entityReference, hashData);
+
+	const ACrab& reference = static_cast<const ACrab&>(entityReference);
+
+	writer.NewOptionalEntityPointerProperty("Turret", m_pTurret, hashData);
+	writer.NewOptionalEntityPointerProperty("Jetpack", m_pJetpack, hashData);
+	writer.NewOptionalEntityPointerProperty("LFGLeg", m_pLFGLeg, hashData);
+	writer.NewOptionalEntityPointerProperty("LBGLeg", m_pLBGLeg, hashData);
+	writer.NewOptionalEntityPointerProperty("RFGLeg", m_pRFGLeg, hashData);
+	writer.NewOptionalEntityPointerProperty("RBGLeg", m_pRBGLeg, hashData);
+	writer.NewOptionalEntityPointerProperty("LFGFootGroup", m_pLFGFootGroup, hashData);
+	writer.NewOptionalEntityPointerProperty("LBGFootGroup", m_pLBGFootGroup, hashData);
+	writer.NewOptionalEntityPointerProperty("RFGFootGroup", m_pRFGFootGroup, hashData);
+	writer.NewOptionalEntityPointerProperty("RBGFootGroup", m_pRBGFootGroup, hashData);
+	writer.NewOptionalEntityPointerProperty("StrideSound", m_StrideSound, hashData);
+	writer.NewDistinctHashedProperty("LStandLimbPath", m_Paths[LEFTSIDE][FGROUND][STAND], hashData);
+	writer.NewDistinctHashedProperty("LWalkLimbPath", m_Paths[LEFTSIDE][FGROUND][WALK], hashData);
+	writer.NewDistinctHashedProperty("LDislodgeLimbPath", m_Paths[LEFTSIDE][FGROUND][DISLODGE], hashData);
+	writer.NewDistinctHashedProperty("RStandLimbPath", m_Paths[RIGHTSIDE][FGROUND][STAND], hashData);
+	writer.NewDistinctHashedProperty("RWalkLimbPath", m_Paths[RIGHTSIDE][FGROUND][WALK], hashData);
+	writer.NewDistinctHashedProperty("RDislodgeLimbPath", m_Paths[RIGHTSIDE][FGROUND][DISLODGE], hashData);
+	writer.NewDistinctProperty("AimRangeUpperLimit", m_AimRangeUpperLimit, reference.m_AimRangeUpperLimit);
+	writer.NewDistinctProperty("AimRangeLowerLimit", m_AimRangeLowerLimit, reference.m_AimRangeLowerLimit);
+	writer.NewDistinctProperty("LockMouseAimInput", m_LockMouseAimInput, reference.m_LockMouseAimInput);
+
+	return 0;
+}
+
+HashingData ACrab::Hash() const {
+	HashingData hashData(Actor::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	bool turretDef = m_pTurret != nullptr;
+	hashData.m_ParseValues.push_back(turretDef);
+	if (turretDef) {
+		uint64_t turretHash = m_pTurret->Hash().m_Hash;
+		hashData.m_Constituents.push_back(turretHash);
+		hash ^= turretHash << 0;
+	}
+
+	bool jetpackDef = m_pJetpack != nullptr;
+	hashData.m_ParseValues.push_back(jetpackDef);
+	if (jetpackDef) {
+		uint64_t jetpackHash = m_pJetpack->Hash().m_Hash;
+		hashData.m_Constituents.push_back(jetpackHash);
+		hash ^= jetpackHash << 1;
+	}
+
+	bool lfgLegDef = m_pLFGLeg != nullptr;
+	hashData.m_ParseValues.push_back(lfgLegDef);
+	if (lfgLegDef) {
+		uint64_t lfgLegHash = m_pLFGLeg->Hash().m_Hash;
+		hashData.m_Constituents.push_back(lfgLegHash);
+		hash ^= lfgLegHash << 2;
+	}
+
+	bool lbgLegDef = m_pLBGLeg != nullptr;
+	hashData.m_ParseValues.push_back(lbgLegDef);
+	if (lbgLegDef) {
+		uint64_t lbgLegHash = m_pLBGLeg->Hash().m_Hash;
+		hashData.m_Constituents.push_back(lbgLegHash);
+		hash ^= lbgLegHash << 3;
+	}
+
+	bool rfgLegDef = m_pRFGLeg != nullptr;
+	hashData.m_ParseValues.push_back(rfgLegDef);
+	if (rfgLegDef) {
+		uint64_t rfgLegHash = m_pRFGLeg->Hash().m_Hash;
+		hashData.m_Constituents.push_back(rfgLegHash);
+		hash ^= rfgLegHash << 4;
+	}
+
+	bool rbgLegDef = m_pRBGLeg != nullptr;
+	hashData.m_ParseValues.push_back(rbgLegDef);
+	if (rbgLegDef) {
+		uint64_t rbgLegHash = m_pRBGLeg->Hash().m_Hash;
+		hashData.m_Constituents.push_back(rbgLegHash);
+		hash ^= rbgLegHash << 5;
+	}
+
+	bool lfgFootGroupDef = m_pLFGFootGroup != nullptr;
+	hashData.m_ParseValues.push_back(lfgFootGroupDef);
+	if (lfgFootGroupDef) {
+		uint64_t lfgFootGroupHash = m_pLFGFootGroup->Hash().m_Hash;
+		hashData.m_Constituents.push_back(lfgFootGroupHash);
+		hash ^= lfgFootGroupHash << 6;
+	}
+
+	bool lbgFootGroupDef = m_pLBGFootGroup != nullptr;
+	hashData.m_ParseValues.push_back(lbgFootGroupDef);
+	if (lbgFootGroupDef) {
+		uint64_t lbgFootGroupHash = m_pLBGFootGroup->Hash().m_Hash;
+		hashData.m_Constituents.push_back(lbgFootGroupHash);
+		hash ^= lbgFootGroupHash << 7;
+	}
+
+	bool rfgFootGroupDef = m_pRFGFootGroup != nullptr;
+	hashData.m_ParseValues.push_back(rfgFootGroupDef);
+	if (rfgFootGroupDef) {
+		uint64_t rfgFootGroupHash = m_pRFGFootGroup->Hash().m_Hash;
+		hashData.m_Constituents.push_back(rfgFootGroupHash);
+		hash ^= rfgFootGroupHash << 8;
+	}
+
+	bool rbgFootGroupDef = m_pRBGFootGroup != nullptr;
+	hashData.m_ParseValues.push_back(rbgFootGroupDef);
+	if (rbgFootGroupDef) {
+		uint64_t rbgFootGroupHash = m_pRBGFootGroup->Hash().m_Hash;
+		hashData.m_Constituents.push_back(rbgFootGroupHash);
+		hash ^= rbgFootGroupHash << 9;
+	}
+
+	bool strideSoundDef = m_StrideSound != nullptr;
+	hashData.m_ParseValues.push_back(strideSoundDef);
+	if (strideSoundDef) {
+		uint64_t strideSoundHash = m_StrideSound->Hash().m_Hash;
+		hashData.m_Constituents.push_back(strideSoundHash);
+		hash ^= strideSoundHash << 10;
+	}
+
+	uint64_t leftStandPathHash = m_Paths[LEFTSIDE][FGROUND][STAND].Hash().m_Hash;
+	hashData.m_Constituents.push_back(leftStandPathHash);
+	hash ^= leftStandPathHash << 12;
+
+	uint64_t leftWalkPathHash = m_Paths[LEFTSIDE][FGROUND][WALK].Hash().m_Hash;
+	hashData.m_Constituents.push_back(leftWalkPathHash);
+	hash ^= leftWalkPathHash << 13;
+
+	uint64_t leftDislodgePathHash = m_Paths[LEFTSIDE][FGROUND][DISLODGE].Hash().m_Hash;
+	hashData.m_Constituents.push_back(leftDislodgePathHash);
+	hash ^= leftDislodgePathHash << 14;
+
+	uint64_t rightStandPathHash = m_Paths[RIGHTSIDE][FGROUND][STAND].Hash().m_Hash;
+	hashData.m_Constituents.push_back(rightStandPathHash);
+	hash ^= rightStandPathHash << 15;
+
+	uint64_t rightWalkPathHash = m_Paths[RIGHTSIDE][FGROUND][WALK].Hash().m_Hash;
+	hashData.m_Constituents.push_back(rightWalkPathHash);
+	hash ^= rightWalkPathHash << 0;
+
+	uint64_t rightDislodgePathHash = m_Paths[RIGHTSIDE][FGROUND][DISLODGE].Hash().m_Hash;
+	hashData.m_Constituents.push_back(rightDislodgePathHash);
+	hash ^= rightDislodgePathHash << 1;
+
+	hash ^= static_cast<uint64_t>(m_AimRangeUpperLimit) << 2;
+	hash ^= static_cast<uint64_t>(m_AimRangeLowerLimit) << 3;
+	hash ^= static_cast<uint64_t>(m_LockMouseAimInput) << 4;
+
+	return hashData;
 }
 
 void ACrab::Destroy(bool notInherited) {

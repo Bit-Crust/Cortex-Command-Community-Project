@@ -130,13 +130,20 @@ int BunkerAssembly::Create(const BunkerAssembly& reference) {
 int BunkerAssembly::ReadProperty(const std::string_view& propName, Reader& reader) {
 	StartPropertyList(return SceneObject::ReadProperty(propName, reader));
 
-	// Ignore TerrainObject's specific properties, but don't let parent class process them
-	MatchProperty("FGColorFile", {});
-	MatchProperty("MaterialFile", {});
-	MatchProperty("BGColorFile", {});
-	MatchProperty("BitmapOffset", {});
-	MatchProperty("Location", {});
-	MatchProperty("AddChildObject", {});
+	// Ignore TerrainObject's specific properties, but don't let parent class process them.
+	// Their values still have to be read, or what's left of them is taken for the next property.
+	MatchForwards("FGColorFile") MatchForwards("MaterialFile") MatchProperty("BGColorFile", {
+		ContentFile ignoredFile;
+		reader >> ignoredFile;
+	});
+	MatchForwards("BitmapOffset") MatchProperty("Location", {
+		Vector ignoredVector;
+		reader >> ignoredVector;
+	});
+	MatchProperty("AddChildObject", {
+		SceneObject::SOPlacer ignoredChildObject;
+		reader >> ignoredChildObject;
+	});
 
 	MatchProperty("SymmetricAssembly",
 	              {
@@ -214,12 +221,10 @@ int BunkerAssembly::Save(Writer& writer) const {
 		}
 	}
 	if (m_SymmetricAssembly.size() > 0) {
-		writer.NewProperty("SymmetricAssembly");
-		writer << m_SymmetricAssembly;
+		writer.NewPropertyWithValue("SymmetricAssembly", m_SymmetricAssembly);
 	}
 	if (m_ParentAssemblyScheme.size() > 0) {
-		writer.NewProperty("ParentScheme");
-		writer << m_ParentAssemblyScheme;
+		writer.NewPropertyWithValue("ParentScheme", m_ParentAssemblyScheme);
 	}
 
 	for (std::list<SceneObject*>::const_iterator oItr = m_PlacedObjects.begin(); oItr != m_PlacedObjects.end(); ++oItr) {
@@ -234,35 +239,46 @@ int BunkerAssembly::Save(Writer& writer) const {
 		// Only write certain properties if they are applicable to the type of SceneObject being written
 		MOSRotating* pSpriteObj = dynamic_cast<MOSRotating*>(*oItr);
 		if (pSpriteObj) {
-			writer.NewProperty("HFlipped");
-			writer << pSpriteObj->IsHFlipped();
+			writer.NewPropertyWithValue("HFlipped", pSpriteObj->IsHFlipped());
 			Actor* pActor = dynamic_cast<Actor*>(pSpriteObj);
 			if (pActor) {
-				writer.NewProperty("Team");
-				writer << pActor->GetTeam();
+				writer.NewPropertyWithValue("Team", pActor->GetTeam());
 				// Rotation of doors is important
 				ADoor* pDoor = dynamic_cast<ADoor*>(pActor);
 				if (pDoor) {
-					writer.NewProperty("Rotation");
-					writer << pDoor->GetRotMatrix();
+					writer.NewPropertyWithValue("Rotation", pDoor->GetRotMatrix());
 				}
 			}
 		}
 		TerrainObject* pTObject = dynamic_cast<TerrainObject*>(*oItr);
 		if (pTObject && !pTObject->GetChildObjects().empty()) {
-			writer.NewProperty("Team");
-			writer << pTObject->GetTeam();
+			writer.NewPropertyWithValue("Team", pTObject->GetTeam());
 		}
 		Deployment* pDeployment = dynamic_cast<Deployment*>(*oItr);
 		if (pDeployment) {
-			writer.NewProperty("HFlipped");
-			writer << pDeployment->IsHFlipped();
+			writer.NewPropertyWithValue("HFlipped", pDeployment->IsHFlipped());
 		}
 
 		writer.ObjectEnd();
 	}
 
 	return 0;
+}
+
+HashingData BunkerAssembly::Hash() const {
+	HashingData hashData(TerrainObject::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	hash ^= RTE::Hash(m_ParentAssemblyScheme) << 0;
+	hash ^= RTE::Hash(m_ParentSchemeGroup) << 1;
+	hash ^= RTE::Hash(m_SymmetricAssembly) << 2;
+
+	int i = 0;
+	for (const SceneObject* placedObject: m_PlacedObjects) {
+		hash ^= placedObject->Hash().m_Hash << (i++ % (sizeof(uint64_t) * 8));
+	}
+
+	return hashData;
 }
 
 void BunkerAssembly::Destroy(bool notInherited) {

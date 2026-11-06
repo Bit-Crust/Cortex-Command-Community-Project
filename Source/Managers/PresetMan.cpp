@@ -343,17 +343,16 @@ const Entity* PresetMan::GetEntityPreset(Reader& reader) {
 	int whichModule = reader.GetReadModuleID();
 	RTEAssert(whichModule >= 0 && whichModule < (int)m_pDataModules.size(), "Reader has an out of bounds module number!");
 
-	std::string ClassName;
-	const Entity::ClassInfo* pClass = 0;
-	Entity* pNewInstance = 0;
-	const Entity* pReturnPreset = 0;
+	const Entity* pReturnPreset = nullptr;
+
 	// Load class name and then preset instance
+	std::string ClassName;
 	reader >> ClassName;
-	pClass = Entity::ClassInfo::GetClass(ClassName);
+	const Entity::ClassInfo* pClass = Entity::ClassInfo::GetClass(ClassName);
 
 	if (pClass && pClass->IsConcrete()) {
 		// Instantiate
-		pNewInstance = pClass->NewInstance();
+		Entity* pNewInstance = pClass->NewInstance();
 
 		// Get this before reading entity, since if it's the last one in its datafile, the stream will show the parent file instead
 		std::string entityFilePath = reader.GetCurrentFilePath();
@@ -376,13 +375,89 @@ const Entity* PresetMan::GetEntityPreset(Reader& reader) {
 					pReturnPreset = m_pDataModules[i]->GetEntityPreset(pNewInstance->GetClassName(), pNewInstance->GetPresetName());
 			}
 		}
-		// Get rid of the read-in instance as its copy is now either added to the map, or discarded as there already was somehting in there of the same name.
+		// Get rid of the read-in instance as if it's in the preset map, it's.
 		delete pNewInstance;
-		pNewInstance = 0;
-	} else
-		pReturnPreset = 0;
+	}
 
 	return pReturnPreset;
+}
+
+const Entity* PresetMan::GetEntityPresetFromCharacteristic(Reader& reader, bool moduleMayBeUnloaded) {
+	std::string Characteristic;
+	reader >> Characteristic;
+
+	// A reference can be null.
+	if (Characteristic == "None") {
+		return nullptr;
+	}
+
+	size_t firstBackslash = Characteristic.find_first_of('/');
+	size_t lastBackslash = Characteristic.find_last_of('/');
+
+	std::string ClassName;
+	std::string PresetName;
+	std::string ModuleName;
+
+	// Whatever modules are loaded, a reference can only ever point at something with exactly a class, a module and a preset, and modules can't add classes.
+	bool wellFormed = firstBackslash != lastBackslash && firstBackslash != std::string::npos && Characteristic.find('/', firstBackslash + 1) == lastBackslash;
+
+	if (wellFormed) {
+		ClassName = Characteristic.substr(0, firstBackslash);
+		PresetName = Characteristic.substr(lastBackslash + 1);
+		ModuleName = Characteristic.substr(firstBackslash + 1, lastBackslash - firstBackslash - 1);
+		wellFormed = !PresetName.empty() && !ModuleName.empty() && Entity::ClassInfo::GetClass(ClassName) != nullptr;
+	}
+
+	if (!wellFormed) {
+		const std::string error = "Constant reference \"" + Characteristic + "\" isn't in the form <class/module/preset name>";
+
+		if (!moduleMayBeUnloaded) {
+			RTEAbort(error + ", in file " + reader.GetCurrentFilePath() + ", shortly before line #" + reader.GetCurrentFileLine());
+		}
+		reader.ReportRecoverableError(error);
+		// A reference written in the old form has its preset name nested under it. If that was read as a property of whatever holds this reference, it would rename it, and throw the Reader's depth off for everything after.
+		reader.DiscardNestedProperties();
+
+		return nullptr;
+	}
+
+	int ModuleID = GetModuleID(ModuleName);
+
+	if (ModuleID < 0 || ModuleID >= (int)m_pDataModules.size()) {
+		if (!moduleMayBeUnloaded) {
+			RTEAbort("Unrecognized module name \"" + ModuleName + "\" while reading constant reference in file " + reader.GetCurrentFilePath() + ", shortly before line #" + reader.GetCurrentFileLine());
+		}
+		// There's no telling this from a module that just isn't loaded right now, which is no fault of the reference.
+		return nullptr;
+	}
+
+	const Entity* pReturnPreset = m_pDataModules[ModuleID]->GetEntityPreset(ClassName, PresetName);
+
+	if (pReturnPreset != nullptr) {
+		return pReturnPreset;
+	}
+
+	if (moduleMayBeUnloaded) {
+		RTEAssert(false, "Could not find preset \"" + PresetName + "\" of type \"" + ClassName + "\" in loaded module \"" + ModuleName + "\", for constant reference in file " + reader.GetCurrentFilePath() + ", shortly before line #" + reader.GetCurrentFileLine() +
+			"\nIt will be left out if this assertion is ignored.");
+
+		return nullptr;
+	}
+
+	// In an attempt to be graceful, if, despite being well formed, the constant reference points to nothing, query every module for the same specs.
+	for (int i = 0; i < m_DataModuleIDs.size() && !pReturnPreset; ++i)
+		pReturnPreset = m_pDataModules[i]->GetEntityPreset(ClassName, PresetName);
+
+	if (pReturnPreset != nullptr) {
+		RTEAssert(false, "Could not find preset \"" + PresetName + "\" of type \"" + ClassName + "\" in module \"" + ModuleName + "\", for constant reference in file " + reader.GetCurrentFilePath() + ", shortly before line #" + reader.GetCurrentFileLine() +
+			"\nA preset of this type and name was found in module \"" + pReturnPreset->GetModuleName() + "\", which will be used if this assertion is ignored, though the reference should be corrected if this is acceptable.");
+
+		return pReturnPreset;
+	}
+
+	RTEAbort("Could not find preset \"" + PresetName + "\" of type \"" + ClassName + "\" in ANY module, including presented \"" + ModuleName + "\", for constant reference in file " + reader.GetCurrentFilePath() + ", shortly before line #" + reader.GetCurrentFileLine());
+
+	return nullptr;
 }
 
 Entity* PresetMan::ReadReflectedPreset(Reader& reader) {
@@ -391,15 +466,12 @@ Entity* PresetMan::ReadReflectedPreset(Reader& reader) {
 	RTEAssert(whichModule >= 0 && whichModule < (int)m_pDataModules.size(), "Reader has an out of bounds module number!");
 
 	std::string ClassName;
-	const Entity::ClassInfo* pClass = 0;
-	Entity* pNewInstance = 0;
-	// Load class name and then preset instance
 	reader >> ClassName;
-	pClass = Entity::ClassInfo::GetClass(ClassName);
+	const Entity::ClassInfo* pClass = Entity::ClassInfo::GetClass(ClassName);
 
 	if (pClass && pClass->IsConcrete()) {
 		// Instantiate
-		pNewInstance = pClass->NewInstance();
+		Entity* pNewInstance = pClass->NewInstance();
 
 		// Get this before reading entity, since if it's the last one in its datafile, the stream will show the parent file instead
 		std::string entityFilePath = reader.GetCurrentFilePath();
@@ -416,7 +488,7 @@ Entity* PresetMan::ReadReflectedPreset(Reader& reader) {
 		}
 	}
 
-	return 0;
+	return nullptr;
 }
 
 bool PresetMan::GetAllOfType(std::list<Entity*>& entityList, const std::string& type, int whichModule) {
@@ -711,6 +783,34 @@ std::string PresetMan::GetEntityDataLocation(const std::string& type, const std:
 	}
 
 	return pRetPath;
+}
+
+const HashingData* PresetMan::GetEntityHash(std::string type, std::string preset, int whichModule) {
+	RTEAssert(whichModule < (int)m_pDataModules.size(), "Tried to access an out of bounds data module number!");
+
+	const HashingData* pHash = nullptr;
+
+	// All modules
+	if (whichModule < 0) {
+		// Search all modules
+		for (int i = 0; i < m_pDataModules.size() && !pHash; ++i)
+			pHash = m_pDataModules[i]->GetEntityHash(type, preset);
+	}
+	// Specific module
+	else {
+		// Try to get it from the asked for module
+		pHash = m_pDataModules[whichModule]->GetEntityHash(type, preset);
+
+		// If couldn't find it in there, then try all the official modules!
+		if (!pHash) {
+			RTEAssert(m_OfficialModuleCount <= m_pDataModules.size(), "More official modules than modules loaded?!");
+			for (int i = 0; i < m_OfficialModuleCount && !pHash; ++i) {
+				pHash = m_pDataModules[i]->GetEntityHash(type, preset);
+			}
+		}
+	}
+
+	return pHash;
 }
 
 void PresetMan::ReloadAllScripts() const {

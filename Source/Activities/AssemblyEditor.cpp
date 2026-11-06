@@ -63,17 +63,18 @@ int AssemblyEditor::Create(const AssemblyEditor& reference) {
 
 int AssemblyEditor::ReadProperty(const std::string_view& propName, Reader& reader) {
 	StartPropertyList(return EditorActivity::ReadProperty(propName, reader));
-	/*
-	    MatchProperty("CPUTeam", { reader >> m_CPUTeam; });
-	    MatchProperty("Difficulty", { reader >> m_Difficulty; });
-	    MatchProperty("DeliveryDelay", { reader >> m_DeliveryDelay; });
-	*/
+
 	EndPropertyList;
 }
 
 int AssemblyEditor::Save(Writer& writer) const {
 	EditorActivity::Save(writer);
 	return 0;
+}
+
+HashingData AssemblyEditor::Hash() const {
+	// If we don't save any distinguishing characteristics, at all, then this may as well be
+	return EditorActivity::Hash();
 }
 
 void AssemblyEditor::Destroy(bool notInherited) {

@@ -92,18 +92,46 @@ int MOPixel::ReadProperty(const std::string_view& propName, Reader& reader) {
 int MOPixel::Save(Writer& writer) const {
 	MovableObject::Save(writer);
 
-	writer.NewProperty("Atom");
-	writer << m_Atom;
-	writer.NewProperty("Color");
-	writer << m_Color;
-	writer.NewProperty("MinLethalRange");
-	writer << m_MinLethalRange;
-	writer.NewProperty("MaxLethalRange");
-	writer << m_MaxLethalRange;
-	writer.NewProperty("Staininess");
-	writer << m_Staininess;
+	writer.NewPropertyWithValue("Atom", m_Atom);
+	writer.NewPropertyWithValue("Color", m_Color);
+	writer.NewPropertyWithValue("MinLethalRange", m_MinLethalRange);
+	writer.NewPropertyWithValue("MaxLethalRange", m_MaxLethalRange);
+	writer.NewPropertyWithValue("Staininess", m_Staininess);
 
 	return 0;
+}
+
+int MOPixel::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	MovableObject::Write(writer, entityReference, hashData);
+
+	const MOPixel& reference = static_cast<const MOPixel&>(entityReference);
+
+	writer.NewEntityPointerProperty("Atom", m_Atom, hashData);
+	writer.NewDistinctHashedProperty("Color", m_Color, hashData);
+	writer.NewDistinctProperty("MinLethalRange", m_MinLethalRange, reference.m_MinLethalRange);
+	writer.NewDistinctProperty("MaxLethalRange", m_MaxLethalRange, reference.m_MaxLethalRange);
+	writer.NewDistinctProperty("Staininess", m_Staininess, reference.m_Staininess);
+
+	return 0;
+}
+
+HashingData MOPixel::Hash() const {
+	HashingData hashData(MovableObject::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	uint64_t atomHash = m_Atom->Hash().m_Hash;
+	hashData.m_Constituents.push_back(atomHash);
+	hash ^= atomHash << 1;
+
+	uint64_t colorHash = m_Color.Hash().m_Hash;
+	hashData.m_Constituents.push_back(colorHash);
+	hash ^= colorHash << 2;
+
+	hash ^= static_cast<uint64_t>(m_MinLethalRange) << 3;
+	hash ^= static_cast<uint64_t>(m_MaxLethalRange) << 4;
+	hash ^= static_cast<uint64_t>(m_Staininess) << 5;
+
+	return hashData;
 }
 
 void MOPixel::Destroy(bool notInherited) {

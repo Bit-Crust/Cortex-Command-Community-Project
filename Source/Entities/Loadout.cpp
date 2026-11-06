@@ -40,49 +40,30 @@ int Loadout::Create(const Loadout& reference) {
 int Loadout::ReadProperty(const std::string_view& propName, Reader& reader) {
 	StartPropertyList(return Entity::ReadProperty(propName, reader));
 
-	// Need to load all this stuff without the assumption that it all is available. Mods might have changed etc so things might still not be around, and that's ok.
-	MatchProperty("DeliveryCraft",
-	              {
-		              std::string className;
-		              std::string presetName;
-		              // Load class name and then preset instance name
-		              reader >> className;
-		              // Ignore the property name, just interested in the value
-		              if (reader.ReadPropName() != "PresetName")
-			              reader.ReportError("Expected property \"PresetName\" not found when reading BuyMenu Loadout settings!");
-		              // Read the preset's name and try to find it
-		              presetName = reader.ReadPropValue();
-		              // It's OK if we can't find it.. just means we aren't a complete loadout
-		              m_pDeliveryCraft = dynamic_cast<const ACraft*>(g_PresetMan.GetEntityPreset(className, presetName, -1));
-		              if (!m_pDeliveryCraft)
-			              m_Complete = false;
-		              // Artificially end reading this property since we got all we needed
-		              reader.NextProperty();
-	              });
-	MatchProperty("AddCargoItem",
-	              {
-		              std::string className;
-		              std::string presetName;
-		              // Load class name and then preset instance name
-		              reader >> className;
-		              // Ignore the property name, just interested in the value
-		              if (reader.ReadPropName() != "PresetName")
-			              reader.ReportError("Expected property \"PresetName\" not found when reading BuyMenu Loadout settings!");
-		              // Read the preset's name and try to find it
-		              presetName = reader.ReadPropValue();
-		              // It's OK if we can't find it.. just means we aren't a complete loadout
-		              const MovableObject* pCargo = dynamic_cast<const MovableObject*>(g_PresetMan.GetEntityPreset(className, presetName, -1));
-		              if (!pCargo)
-			              m_Complete = false;
-		              // Add the found cargo item to the list
-		              else
-			              m_CargoItems.push_back(pCargo);
-
-		              // Artificially end reading this property since we got all we needed
-		              reader.NextProperty();
-
-		              pCargo = 0;
-	              });
+	MatchProperty("DeliveryCraft", {
+		const Entity* entityReference = g_PresetMan.GetEntityPresetFromCharacteristic(reader, true);
+		const ACraft* reference = dynamic_cast<const ACraft*>(entityReference);
+		if (entityReference != nullptr && reference == nullptr) {
+			reader.ReportRecoverableError("Tried to point DeliveryCraft to a non-ACraft type");
+		}
+		SetDeliveryCraft(reference);
+	});
+	MatchProperty("_ClearCargoItems", {
+		reader.ReadPropValue();
+		m_CargoItems.clear();
+	});
+	MatchForwards("AddCargoItem") MatchProperty("_AddCargoItem", {
+		const Entity* entityReference = g_PresetMan.GetEntityPresetFromCharacteristic(reader, true);
+		const MovableObject* reference = dynamic_cast<const MovableObject*>(entityReference);
+		if (reference != nullptr) {
+			m_CargoItems.push_back(reference);
+		} else {
+			if (entityReference != nullptr) {
+				reader.ReportRecoverableError("Tried to point a cargo item to a non-MovableObject type");
+			}
+			m_Complete = false;
+		}
+	});
 
 	EndPropertyList;
 }
@@ -91,21 +72,45 @@ int Loadout::Save(Writer& writer) const {
 	Entity::Save(writer);
 
 	if (m_pDeliveryCraft) {
-		writer.NewProperty("DeliveryCraft");
-		writer.ObjectStart(m_pDeliveryCraft->GetClassName());
-		writer.NewProperty("PresetName");
-		writer << m_pDeliveryCraft->GetModuleAndPresetName();
-		writer.ObjectEnd();
+		writer.NewPropertyWithValue("DeliveryCraft", m_pDeliveryCraft->GetEntityCharacteristic());
 	}
+
 	for (std::list<const SceneObject*>::const_iterator itr = m_CargoItems.begin(); itr != m_CargoItems.end(); ++itr) {
-		writer.NewProperty("AddCargoItem");
-		writer.ObjectStart((*itr)->GetClassName());
-		writer.NewProperty("PresetName");
-		writer << (*itr)->GetModuleAndPresetName();
-		writer.ObjectEnd();
+		writer.NewPropertyWithValue("_AddCargoItem", (*itr)->GetEntityCharacteristic());
 	}
 
 	return 0;
+}
+
+int Loadout::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	Entity::Write(writer, entityReference, hashData);
+
+	const Loadout& reference = static_cast<const Loadout&>(entityReference);
+
+	writer.NewPresetReferenceProperty("DeliveryCraft", m_pDeliveryCraft, reference.m_pDeliveryCraft);
+	writer.NewPresetReferenceSequence("_ClearCargoItems", "_AddCargoItem", m_CargoItems, hashData);
+
+	return 0;
+}
+
+
+HashingData Loadout::Hash() const {
+	HashingData hashData(Entity::Hash());
+	uint64_t& hash = hashData.m_Hash;
+	
+	hash ^= (m_pDeliveryCraft ? RTE::Hash(m_pDeliveryCraft->GetEntityCharacteristic()) : 0) << 0;
+
+	int i = 0;
+
+	for (const SceneObject* pCargo: m_CargoItems) {
+		uint64_t cargoHash = RTE::Hash(pCargo->GetEntityCharacteristic());
+		hashData.m_Constituents.push_back(cargoHash);
+		hash ^= cargoHash << (i++ % sizeof(uint64_t) * 8);
+	}
+
+	hashData.m_ParseValues.push_back(i);
+
+	return hashData;
 }
 
 /*

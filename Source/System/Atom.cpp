@@ -150,12 +150,12 @@ int Atom::ReadProperty(const std::string_view& propName, Reader& reader) {
 	MatchProperty("Offset", { reader >> m_Offset; });
 	MatchProperty("OriginalOffset", { reader >> m_OriginalOffset; });
 	MatchProperty("Material", {
-		Material mat;
-		mat.Reset();
-		reader >> mat;
-		m_Material = g_SceneMan.AddMaterialCopy(&mat);
-		if (!m_Material) {
-			RTEAbort("Failed to store material \"" + mat.GetPresetName() + "\". Aborting!");
+		const Entity* entityReference = g_PresetMan.GetEntityPresetFromCharacteristic(reader);
+		const Material* reference = dynamic_cast<const Material*>(entityReference);
+		if (entityReference == nullptr || reference != nullptr) {
+			m_Material = reference;
+		} else {
+			reader.ReportError("Tried to point Material to a non-Material type!");
 		}
 	});
 	MatchProperty("TrailColor", { reader >> m_TrailColor; });
@@ -168,14 +168,34 @@ int Atom::ReadProperty(const std::string_view& propName, Reader& reader) {
 int Atom::Save(Writer& writer) const {
 	Serializable::Save(writer);
 
-	writer.NewPropertyWithValue("Offset", m_Offset);
-	writer.NewPropertyWithValue("OriginalOffset", m_OriginalOffset);
-	writer.NewPropertyWithValue("Material", m_Material);
-	writer.NewPropertyWithValue("TrailColor", m_TrailColor);
-	writer.NewPropertyWithValue("TrailLength", m_TrailLength);
-	writer.NewPropertyWithValue("TrailLengthVariation", m_TrailLengthVariation);
+	if (!m_Offset.IsZero())
+		writer.NewPropertyWithValue("Offset", m_Offset);
+	if (!m_OriginalOffset.IsZero())
+		writer.NewPropertyWithValue("OriginalOffset", m_OriginalOffset);
+	if (m_Material != nullptr)
+		writer.NewPropertyWithValue("Material", m_Material->GetEntityCharacteristic());
+	if (m_TrailColor.GetR() != 0 || m_TrailColor.GetG() != 0 || m_TrailColor.GetB() != 0)
+		writer.NewPropertyWithValue("TrailColor", m_TrailColor);
+	if (m_TrailLength != 0)
+		writer.NewPropertyWithValue("TrailLength", m_TrailLength);
+	if (m_TrailLengthVariation != 0.0F)
+		writer.NewPropertyWithValue("TrailLengthVariation", m_TrailLengthVariation);
 
 	return 0;
+}
+
+HashingData Atom::Hash() const {
+	HashingData hashData(Serializable::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	hash ^= m_Offset.Hash().m_Hash << 0;
+	hash ^= m_OriginalOffset.Hash().m_Hash << 1;
+	hash ^= (m_Material ? RTE::Hash(m_Material->GetEntityCharacteristic()) : 0) << 2;
+	hash ^= m_TrailColor.Hash().m_Hash << 3;
+	hash ^= static_cast<uint64_t>(m_TrailLength) << 4;
+	hash ^= static_cast<uint64_t>(m_TrailLengthVariation) << 5;
+
+	return hashData;
 }
 
 void* Atom::GetPoolMemory() {

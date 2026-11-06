@@ -48,7 +48,14 @@ int Turret::ReadProperty(const std::string_view& propName, Reader& reader) {
 	StartPropertyList(return Attachable::ReadProperty(propName, reader));
 
 	MatchProperty("MountedDevice", { SetFirstMountedDevice(dynamic_cast<HeldDevice*>(g_PresetMan.ReadReflectedPreset(reader))); });
-	MatchProperty("AddMountedDevice", { AddMountedDevice(dynamic_cast<HeldDevice*>(g_PresetMan.ReadReflectedPreset(reader))); });
+	MatchProperty("_ClearMountedDevices", {
+		reader.ReadPropValue();
+		// Removing a device also takes it out of the list, so go through a copy of it.
+		for (HeldDevice* heldDevice: std::vector<HeldDevice*>(m_MountedDevices)) {
+			delete RemoveAttachable(heldDevice, false, false);
+		}
+	});
+	MatchForwards("AddMountedDevice") MatchProperty("_AddMountedDevice", { AddMountedDevice(dynamic_cast<HeldDevice*>(g_PresetMan.ReadReflectedPreset(reader))); });
 	MatchProperty("MountedDeviceRotationOffset", { reader >> m_MountedDeviceRotationOffset; });
 
 	EndPropertyList;
@@ -58,13 +65,41 @@ int Turret::Save(Writer& writer) const {
 	Attachable::Save(writer);
 
 	for (const HeldDevice* mountedDevice: m_MountedDevices) {
-		writer.NewProperty("AddMountedDevice");
-		writer << mountedDevice;
+		writer.NewPropertyWithValue("AddMountedDevice", mountedDevice);
 	}
-	writer.NewProperty("MountedDeviceRotationOffset");
-	writer << m_MountedDeviceRotationOffset;
+	writer.NewPropertyWithValue("MountedDeviceRotationOffset", m_MountedDeviceRotationOffset);
 
 	return 0;
+}
+
+int Turret::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	Attachable::Write(writer, entityReference, hashData);
+
+	const Turret& reference = static_cast<const Turret&>(entityReference);
+
+	writer.NewPointerSequence("_ClearMountedDevices", "_AddMountedDevice", m_MountedDevices, hashData);
+	writer.NewDistinctProperty("MountedDeviceRotationOffset", m_MountedDeviceRotationOffset, reference.m_MountedDeviceRotationOffset);
+
+	return 0;
+}
+
+HashingData Turret::Hash() const {
+	HashingData hashData(Attachable::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	int i = 0;
+
+	for (const HeldDevice* mountedDevice: m_MountedDevices) {
+		uint64_t mountedDeviceHash = mountedDevice->Hash().m_Hash;
+		hashData.m_Constituents.push_back(mountedDeviceHash);
+		hash ^= mountedDeviceHash << (i++ % sizeof(uint64_t) * 8);
+	}
+
+	hashData.m_ParseValues.push_back(i);
+
+	hash ^= static_cast<uint64_t>(m_MountedDeviceRotationOffset) << 1;
+
+	return hashData;
 }
 
 void Turret::SetFirstMountedDevice(HeldDevice* newMountedDevice) {

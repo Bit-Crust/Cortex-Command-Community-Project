@@ -140,16 +140,16 @@ int Activity::Create(const Activity& reference) {
 int Activity::ReadProperty(const std::string_view& propName, Reader& reader) {
 	StartPropertyList(return Entity::ReadProperty(propName, reader));
 
+	MatchProperty("ActivityState", { m_ActivityState = static_cast<ActivityState>(std::stoi(reader.ReadPropValue())); });
 	MatchProperty("Description", { reader >> m_Description; });
 	MatchProperty("ShowInMenus", { reader >> m_ShowInMenus; });
 	MatchProperty("HumansCanSpectate", { reader >> m_HumansCanSpectate; });
 	MatchProperty("SceneName", { reader >> m_SceneName; });
 	MatchProperty("MaxPlayerSupport", { reader >> m_MaxPlayerSupport; });
 	MatchProperty("MinTeamsRequired", { reader >> m_MinTeamsRequired; });
-	MatchProperty("Difficulty", { reader >> m_Difficulty; });
+	MatchForwards("Difficulty") MatchProperty("_Difficulty", { reader >> m_Difficulty; });
 	MatchProperty("CraftOrbitAtTheEdge", { reader >> m_CraftOrbitAtTheEdge; });
 	MatchProperty("InCampaignStage", { reader >> m_InCampaignStage; });
-	MatchProperty("ActivityState", { m_ActivityState = static_cast<ActivityState>(std::stoi(reader.ReadPropValue())); });
 	MatchProperty("AllowsUserSaving", { reader >> m_AllowsUserSaving; });
 	MatchForwards("TeamOfPlayer1") MatchForwards("TeamOfPlayer2") MatchForwards("TeamOfPlayer3") MatchProperty("TeamOfPlayer4", {
 		for (int playerTeam = Teams::TeamOne; playerTeam < Teams::MaxTeamCount; playerTeam++) {
@@ -197,7 +197,9 @@ int Activity::ReadProperty(const std::string_view& propName, Reader& reader) {
 		for (int team = Teams::TeamOne; team < Teams::MaxTeamCount; team++) {
 			std::string teamNum = std::to_string(team + 1);
 			if (propName == "Team" + teamNum + "Icon") {
-				reader >> m_TeamIcons[team];
+				Icon* icon = static_cast<Icon*>(g_PresetMan.ReadReflectedPreset(reader));
+				icon->Clone(&m_TeamIcons[team]);
+				delete icon;
 				break;
 			}
 		}
@@ -208,6 +210,13 @@ int Activity::ReadProperty(const std::string_view& propName, Reader& reader) {
 			if (propName == "Team" + teamNum + "Funds") {
 				reader >> m_TeamFunds[team];
 				break;
+			}
+		}
+	});
+	MatchForwards("Team1AISkill") MatchForwards("Team2AISkill") MatchForwards("Team3AISkill") MatchProperty("Team4AISkill", {
+		for (int team = Teams::TeamOne; team < Teams::MaxTeamCount; team++) {
+			if (propName == "Team" + std::to_string(team + 1) + "AISkill") {
+				reader >> m_TeamAISkillLevels[team];
 			}
 		}
 	});
@@ -237,58 +246,129 @@ int Activity::ReadProperty(const std::string_view& propName, Reader& reader) {
 int Activity::Save(Writer& writer) const {
 	Entity::Save(writer);
 
-	writer.NewProperty("Description");
-	writer << m_Description;
-	writer.NewProperty("SceneName");
-	writer << m_SceneName;
-	writer.NewProperty("MaxPlayerSupport");
-	writer << m_MaxPlayerSupport;
-	writer.NewProperty("MinTeamsRequired");
-	writer << m_MinTeamsRequired;
-	writer.NewProperty("Difficulty");
-	writer << m_Difficulty;
-	writer.NewProperty("CraftOrbitAtTheEdge");
-	writer << m_CraftOrbitAtTheEdge;
-	writer.NewProperty("InCampaignStage");
-	writer << m_InCampaignStage;
-	writer.NewProperty("ActivityState");
-	writer << m_ActivityState;
-	writer.NewProperty("AllowsUserSaving");
-	writer << m_AllowsUserSaving;
+	writer.NewPropertyWithValue("Description", m_Description);
+	writer.NewPropertyWithValue("SceneName", m_SceneName);
+	writer.NewPropertyWithValue("MaxPlayerSupport", m_MaxPlayerSupport);
+	writer.NewPropertyWithValue("MinTeamsRequired", m_MinTeamsRequired);
+	writer.NewPropertyWithValue("Difficulty", m_Difficulty);
+	writer.NewPropertyWithValue("CraftOrbitAtTheEdge", m_CraftOrbitAtTheEdge);
+	writer.NewPropertyWithValue("InCampaignStage", m_InCampaignStage);
+	writer.NewPropertyWithValue("ActivityState", m_ActivityState);
+	writer.NewPropertyWithValue("AllowsUserSaving", m_AllowsUserSaving);
 
 	for (int player = Players::PlayerOne; player < Players::MaxPlayerCount; player++) {
 		std::string playerNum = std::to_string(player + 1);
+
 		if (m_IsActive[player]) {
-			writer.NewProperty("TeamOfPlayer" + playerNum);
-			writer << m_Team[player];
-			writer.NewProperty("FundsContributionOfPlayer" + playerNum);
-			writer << m_FundsContribution[player];
-			writer.NewProperty("TeamFundsShareOfPlayer" + playerNum);
-			writer << m_TeamFundsShare[player];
-			writer.NewProperty("Player" + playerNum + "IsHuman");
-			writer << m_IsHuman[player];
+			writer.NewPropertyWithValue("TeamOfPlayer" + playerNum, m_Team[player]);
+			writer.NewPropertyWithValue("FundsContributionOfPlayer" + playerNum, m_FundsContribution[player]);
+			writer.NewPropertyWithValue("TeamFundsShareOfPlayer" + playerNum, m_TeamFundsShare[player]);
+			writer.NewPropertyWithValue("Player" + playerNum + "IsHuman", m_IsHuman[player]);
 		} else {
-			writer.NewProperty("TeamOfPlayer" + playerNum);
-			writer << Teams::NoTeam;
+			writer.NewPropertyWithValue("TeamOfPlayer" + playerNum, Teams::NoTeam);
 		}
 	}
 
 	for (int team = Teams::TeamOne; team < Teams::MaxTeamCount; team++) {
 		std::string teamNum = std::to_string(team + 1);
+		
 		if (m_TeamActive[team]) {
-			writer.NewProperty("Team" + teamNum + "Funds");
-			writer << m_TeamFunds[team];
-			writer.NewProperty("Team" + teamNum + "Name");
-			writer << m_TeamNames[team];
-			writer.NewProperty("Team" + teamNum + "Icon");
-			m_TeamIcons[team].SavePresetCopy(writer);
+			writer.NewPropertyWithValue("Team" + teamNum + "Funds", m_TeamFunds[team]);
+			writer.NewPropertyWithValue("Team" + teamNum + "Name", m_TeamNames[team]);
+			writer.NewPropertyWithValue("Team" + teamNum + "Icon", m_TeamIcons[team]);
 		}
 	}
 
-	writer.NewProperty("GenericSavedValues");
-	writer << m_SavedValues;
+	writer.NewPropertyWithValue("GenericSavedValues", m_SavedValues);
 
 	return 0;
+}
+
+int Activity::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	Entity::Write(writer, entityReference, hashData);
+
+	const Activity& reference = static_cast<const Activity&>(entityReference);
+
+	writer.NewDistinctProperty("Description", m_Description, reference.m_Description);
+	writer.NewDistinctProperty("SceneName", m_SceneName, reference.m_SceneName);
+	writer.NewDistinctProperty("MaxPlayerSupport", m_MaxPlayerSupport, reference.m_MaxPlayerSupport);
+	writer.NewDistinctProperty("MinTeamsRequired", m_MinTeamsRequired, reference.m_MinTeamsRequired);
+	writer.NewDistinctProperty("Difficulty", m_Difficulty, reference.m_Difficulty);
+	writer.NewDistinctProperty("CraftOrbitAtTheEdge", m_CraftOrbitAtTheEdge, reference.m_CraftOrbitAtTheEdge);
+	writer.NewDistinctProperty("InCampaignStage", m_InCampaignStage, reference.m_InCampaignStage);
+	writer.NewDistinctProperty("ActivityState", m_ActivityState, reference.m_ActivityState);
+	writer.NewDistinctProperty("AllowsUserSaving", m_AllowsUserSaving, reference.m_AllowsUserSaving);
+
+	for (int player = Players::PlayerOne; player < Players::MaxPlayerCount; player++) {
+		std::string playerNum = std::to_string(player + 1);
+
+		// A player's team is also what marks them active or not when read, so it's written if either differs, and never for a player inactive in both.
+		if (m_IsActive[player] != reference.m_IsActive[player] || (m_IsActive[player] && m_Team[player] != reference.m_Team[player])) {
+			writer.NewPropertyWithValue("TeamOfPlayer" + playerNum, m_IsActive[player] ? m_Team[player] : static_cast<int>(Teams::NoTeam));
+		}
+
+		writer.NewDistinctProperty("FundsContributionOfPlayer" + playerNum, m_FundsContribution[player], reference.m_FundsContribution[player]);
+		writer.NewDistinctProperty("TeamFundsShareOfPlayer" + playerNum, m_TeamFundsShare[player], reference.m_TeamFundsShare[player]);
+		writer.NewDistinctProperty("Player" + playerNum + "IsHuman", m_IsHuman[player], reference.m_IsHuman[player]);
+	}
+
+	for (int team = Teams::TeamOne; team < Teams::MaxTeamCount; team++) {
+		std::string teamNum = std::to_string(team + 1);
+		writer.NewDistinctProperty("Team" + teamNum + "Funds", m_TeamFunds[team], reference.m_TeamFunds[team]);
+
+		// A team's name is also what marks it active when read, so it's written for a team the reference doesn't have active, and never for an inactive one.
+		if (m_TeamActive[team] && (!reference.m_TeamActive[team] || m_TeamNames[team] != reference.m_TeamNames[team])) {
+			writer.NewPropertyWithValue("Team" + teamNum + "Name", m_TeamNames[team]);
+		}
+
+		writer.NewDistinctHashedProperty("Team" + teamNum + "Icon", m_TeamIcons[team], hashData);
+		writer.NewDistinctProperty("Team" + teamNum + "AISkill", m_TeamAISkillLevels[team], reference.m_TeamAISkillLevels[team]);
+	}
+
+	writer.NewDistinctHashedProperty("GenericSavedValues", m_SavedValues, hashData);
+
+	return 0;
+}
+
+HashingData Activity::Hash() const {
+	HashingData hashData(Entity::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	hash ^= RTE::Hash(m_Description) << 0;
+	hash ^= RTE::Hash(m_SceneName) << 1;
+	hash ^= static_cast<uint64_t>(m_MaxPlayerSupport) << 2;
+	hash ^= static_cast<uint64_t>(m_MinTeamsRequired) << 3;
+	hash ^= static_cast<uint64_t>(m_Difficulty) << 4;
+	hash ^= static_cast<uint64_t>(m_CraftOrbitAtTheEdge) << 5;
+	hash ^= static_cast<uint64_t>(m_InCampaignStage) << 6;
+	hash ^= static_cast<uint64_t>(m_ActivityState) << 7;
+	hash ^= static_cast<uint64_t>(m_AllowsUserSaving) << 8;
+
+	for (int player = Players::PlayerOne; player < Players::MaxPlayerCount; player++) {
+		if (m_IsActive[player]) {
+			hash ^= static_cast<uint64_t>(m_Team[player]) << (4 * player);
+			hash ^= static_cast<uint64_t>(m_FundsContribution[player]) << (4 * player + 1);
+			hash ^= static_cast<uint64_t>(m_TeamFundsShare[player]) << (4 * player + 2);
+			hash ^= static_cast<uint64_t>(m_IsHuman[player]) << (4 * player + 3);
+		}
+	}
+
+	for (int team = Teams::TeamOne; team < Teams::MaxTeamCount; team++) {
+		hash ^= static_cast<uint64_t>(m_TeamFunds[team]) << (4 * team);
+		hash ^= RTE::Hash(m_TeamNames[team]) << (4 * team + 1);
+
+		uint64_t teamIconHash = m_TeamIcons[team].Hash().m_Hash;
+		hashData.m_Constituents.push_back(teamIconHash);
+		hash ^= teamIconHash << (4 * team + 2);
+
+		hash ^= static_cast<uint64_t>(m_TeamAISkillLevels[team]) << (4 * team + 3);
+	}
+
+	uint64_t savedValueHash = m_SavedValues.Hash().m_Hash;
+	hashData.m_Constituents.push_back(savedValueHash);
+	hash ^= savedValueHash << 9;
+
+	return hashData;
 }
 
 int Activity::Start() {

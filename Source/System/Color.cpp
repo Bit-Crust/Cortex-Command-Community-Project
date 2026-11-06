@@ -35,11 +35,25 @@ int Color::ReadProperty(const std::string_view& propName, Reader& reader) {
 int Color::Save(Writer& writer) const {
 	Serializable::Save(writer);
 
-	writer.NewPropertyWithValue("R", m_R);
-	writer.NewPropertyWithValue("G", m_G);
-	writer.NewPropertyWithValue("B", m_B);
+	if (m_R != 0)
+		writer.NewPropertyWithValue("R", m_R);
+	if (m_R != 0)
+		writer.NewPropertyWithValue("G", m_G);
+	if (m_R != 0)
+		writer.NewPropertyWithValue("B", m_B);
 
 	return 0;
+}
+
+HashingData Color::Hash() const {
+	HashingData hashData(Serializable::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	hash ^= static_cast<uint64_t>(m_R) << 0;
+	hash ^= static_cast<uint64_t>(m_G) << 1;
+	hash ^= static_cast<uint64_t>(m_B) << 2;
+
+	return hashData;
 }
 
 void Color::SetRGBWithIndex(int index) {

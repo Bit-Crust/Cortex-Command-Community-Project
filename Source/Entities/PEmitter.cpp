@@ -89,7 +89,14 @@ int PEmitter::Create(const PEmitter& reference) {
 int PEmitter::ReadProperty(const std::string_view& propName, Reader& reader) {
 	StartPropertyList(return MOSParticle::ReadProperty(propName, reader));
 
-	MatchProperty("AddEmission", {
+	MatchProperty("_ClearEmissions", {
+		reader.ReadPropValue();
+		for (Emission* emission: m_EmissionList) {
+			delete emission;
+		}
+		m_EmissionList.clear();
+	});
+	MatchForwards("AddEmission") MatchProperty("_AddEmission", {
 		Emission* emission = new Emission();
 		reader >> *emission;
 		m_EmissionList.push_back(emission);
@@ -140,50 +147,109 @@ int PEmitter::Save(Writer& writer) const {
 		writer.NewProperty("AddEmission");
 		writer << *emission;
 	}
-	writer.NewProperty("EmissionSound");
-	writer << m_EmissionSound;
-	writer.NewProperty("BurstSound");
-	writer << m_BurstSound;
-	writer.NewProperty("EndSound");
-	writer << m_EndSound;
-	writer.NewProperty("EmissionEnabled");
-	writer << m_EmitEnabled;
-	writer.NewProperty("EmissionCount");
-	writer << m_EmitCount;
-	writer.NewProperty("EmissionCountLimit");
-	writer << m_EmitCountLimit;
-	writer.NewProperty("EmissionsIgnoreThis");
-	writer << m_EmissionsIgnoreThis;
-	writer.NewProperty("NegativeThrottleMultiplier");
-	writer << m_NegativeThrottleMultiplier;
-	writer.NewProperty("PositiveThrottleMultiplier");
-	writer << m_PositiveThrottleMultiplier;
-	writer.NewProperty("Throttle");
-	writer << m_Throttle;
-	writer.NewProperty("BurstScale");
-	writer << m_BurstScale;
-	writer.NewProperty("BurstSpacing");
-	writer << m_BurstSpacing;
-	writer.NewProperty("BurstTriggered");
-	writer << m_BurstTriggered;
-	writer.NewProperty("PlayBurstSound");
-	writer << m_PlayBurstSound;
-	writer.NewProperty("EmissionAngle");
-	writer << m_EmitAngle;
-	writer.NewProperty("EmissionOffset");
-	writer << m_EmissionOffset;
-	writer.NewProperty("FlashScale");
-	writer << m_FlashScale;
-	writer.NewProperty("FlashOnlyOnBurst");
-	writer << m_FlashOnlyOnBurst;
-	writer.NewProperty("SustainBurstSound");
-	writer << m_SustainBurstSound;
-	writer.NewProperty("BurstSoundFollowsEmitter");
-	writer << m_BurstSoundFollowsEmitter;
-	writer.NewProperty("LoudnessOnEmit");
-	writer << m_LoudnessOnEmit;
+
+	writer.NewPropertyWithValue("EmissionSound", m_EmissionSound);
+	writer.NewPropertyWithValue("BurstSound", m_BurstSound);
+	writer.NewPropertyWithValue("EndSound", m_EndSound);
+	writer.NewPropertyWithValue("EmissionEnabled", m_EmitEnabled);
+	writer.NewPropertyWithValue("EmissionCount", m_EmitCount);
+	writer.NewPropertyWithValue("EmissionCountLimit", m_EmitCountLimit);
+	writer.NewPropertyWithValue("EmissionsIgnoreThis", m_EmissionsIgnoreThis);
+	writer.NewPropertyWithValue("NegativeThrottleMultiplier", m_NegativeThrottleMultiplier);
+	writer.NewPropertyWithValue("PositiveThrottleMultiplier", m_PositiveThrottleMultiplier);
+	writer.NewPropertyWithValue("Throttle", m_Throttle);
+	writer.NewPropertyWithValue("BurstScale", m_BurstScale);
+	writer.NewPropertyWithValue("BurstSpacing", m_BurstSpacing);
+	writer.NewPropertyWithValue("BurstTriggered", m_BurstTriggered);
+	writer.NewPropertyWithValue("PlayBurstSound", m_PlayBurstSound);
+	writer.NewPropertyWithValue("EmissionAngle", m_EmitAngle);
+	writer.NewPropertyWithValue("EmissionOffset", m_EmissionOffset);
+	writer.NewPropertyWithValue("FlashScale", m_FlashScale);
+	writer.NewPropertyWithValue("FlashOnlyOnBurst", m_FlashOnlyOnBurst);
+	writer.NewPropertyWithValue("SustainBurstSound", m_SustainBurstSound);
+	writer.NewPropertyWithValue("BurstSoundFollowsEmitter", m_BurstSoundFollowsEmitter);
+	writer.NewPropertyWithValue("LoudnessOnEmit", m_LoudnessOnEmit);
 
 	return 0;
+}
+
+int PEmitter::Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const {
+	MOSParticle::Write(writer, entityReference, hashData);
+
+	const PEmitter& reference = static_cast<const PEmitter&>(entityReference);
+
+	writer.NewPointerSequence("_ClearEmissions", "_AddEmission", m_EmissionList, hashData);
+	writer.NewDistinctHashedProperty("EmissionSound", m_EmissionSound, hashData);
+	writer.NewDistinctHashedProperty("BurstSound", m_BurstSound, hashData);
+	writer.NewDistinctHashedProperty("EndSound", m_EndSound, hashData);
+	writer.NewDistinctProperty("EmissionEnabled", m_EmitEnabled, reference.m_EmitEnabled);
+	writer.NewDistinctProperty("EmissionCount", m_EmitCount, reference.m_EmitCount);
+	writer.NewDistinctProperty("EmissionCountLimit", m_EmitCountLimit, reference.m_EmitCountLimit);
+	writer.NewDistinctProperty("EmissionsIgnoreThis", m_EmissionsIgnoreThis, reference.m_EmissionsIgnoreThis);
+	writer.NewDistinctProperty("NegativeThrottleMultiplier", m_NegativeThrottleMultiplier, reference.m_NegativeThrottleMultiplier);
+	writer.NewDistinctProperty("PositiveThrottleMultiplier", m_PositiveThrottleMultiplier, reference.m_PositiveThrottleMultiplier);
+	writer.NewDistinctProperty("Throttle", m_Throttle, reference.m_Throttle);
+	writer.NewDistinctProperty("BurstScale", m_BurstScale, reference.m_BurstScale);
+	writer.NewDistinctProperty("BurstSpacing", m_BurstSpacing, reference.m_BurstSpacing);
+	writer.NewDistinctProperty("BurstTriggered", m_BurstTriggered, reference.m_BurstTriggered);
+	writer.NewDistinctProperty("PlayBurstSound", m_PlayBurstSound, reference.m_PlayBurstSound);
+	writer.NewDistinctProperty("EmissionAngle", m_EmitAngle, reference.m_EmitAngle);
+	writer.NewDistinctProperty("EmissionOffset", m_EmissionOffset, reference.m_EmissionOffset);
+	writer.NewDistinctProperty("FlashScale", m_FlashScale, reference.m_FlashScale);
+	writer.NewDistinctProperty("FlashOnlyOnBurst", m_FlashOnlyOnBurst, reference.m_FlashOnlyOnBurst);
+	writer.NewDistinctProperty("SustainBurstSound", m_SustainBurstSound, reference.m_SustainBurstSound);
+	writer.NewDistinctProperty("BurstSoundFollowsEmitter", m_BurstSoundFollowsEmitter, reference.m_BurstSoundFollowsEmitter);
+	writer.NewDistinctProperty("LoudnessOnEmit", m_LoudnessOnEmit, reference.m_LoudnessOnEmit);
+
+	return 0;
+}
+
+HashingData PEmitter::Hash() const {
+	HashingData hashData(MOSParticle::Hash());
+	uint64_t& hash = hashData.m_Hash;
+
+	int i = 0;
+
+	for (Emission* emission: m_EmissionList) {
+		uint64_t emissionHash = emission->Hash().m_Hash;
+		hashData.m_Constituents.push_back(emissionHash);
+		hash ^= emissionHash << (i++ % sizeof(uint64_t) * 8);
+	}
+
+	hashData.m_ParseValues.push_back(i);
+
+	uint64_t emissionSoundHash = m_EmissionSound.Hash().m_Hash;
+	hashData.m_Constituents.push_back(emissionSoundHash);
+	hash ^= emissionSoundHash << 1;
+
+	uint64_t burstSoundHash = m_BurstSound.Hash().m_Hash;
+	hashData.m_Constituents.push_back(burstSoundHash);
+	hash ^= burstSoundHash << 2;
+
+	uint64_t endSoundHash = m_EndSound.Hash().m_Hash;
+	hashData.m_Constituents.push_back(endSoundHash);
+	hash ^= endSoundHash << 3;
+
+	hash ^= static_cast<uint64_t>(m_EmitEnabled) << 4;
+	hash ^= static_cast<uint64_t>(m_EmitCount) << 5;
+	hash ^= static_cast<uint64_t>(m_EmitCountLimit) << 6;
+	hash ^= static_cast<uint64_t>(m_EmissionsIgnoreThis) << 7;
+	hash ^= static_cast<uint64_t>(m_NegativeThrottleMultiplier) << 8;
+	hash ^= static_cast<uint64_t>(m_PositiveThrottleMultiplier) << 9;
+	hash ^= static_cast<uint64_t>(m_Throttle) << 10;
+	hash ^= static_cast<uint64_t>(m_BurstScale) << 11;
+	hash ^= static_cast<uint64_t>(m_BurstSpacing) << 12;
+	hash ^= static_cast<uint64_t>(m_BurstTriggered) << 13;
+	hash ^= static_cast<uint64_t>(m_PlayBurstSound) << 14;
+	hash ^= m_EmitAngle.Hash().m_Hash << 15;
+	hash ^= m_EmissionOffset.Hash().m_Hash << 0;
+	hash ^= static_cast<uint64_t>(m_FlashScale) << 1;
+	hash ^= static_cast<uint64_t>(m_FlashOnlyOnBurst) << 2;
+	hash ^= static_cast<uint64_t>(m_SustainBurstSound) << 3;
+	hash ^= static_cast<uint64_t>(m_BurstSoundFollowsEmitter) << 4;
+	hash ^= static_cast<uint64_t>(m_LoudnessOnEmit) << 5;
+
+	return hashData;
 }
 
 void PEmitter::Destroy(bool notInherited) {

@@ -242,6 +242,18 @@ int DataModule::Save(Writer& writer) const {
 	return 0;
 }
 
+HashingData DataModule::Hash() const {
+	/* I'm not even sure if this needs doing.
+	 * Only use that comes to mind is cross platform,
+	 * ensuring that two connected clients have functionally identical copies of each mod,
+	 * but they actually need to be literally identical as well, due to Lua access to file structures.
+	 * 
+	 * This maybe shouldn't be serialized at all.
+	 */
+
+	return HashingData(0);
+}
+
 std::string DataModule::GetEntityDataLocation(const std::string& exactType, const std::string& instance) {
 	const Entity* foundEntity = GetEntityPreset(exactType, instance);
 	if (foundEntity == nullptr) {
@@ -257,6 +269,23 @@ std::string DataModule::GetEntityDataLocation(const std::string& exactType, cons
 
 	RTEAbort("Tried to find allegedly existing Entity Preset Entry: " + foundEntity->GetPresetName() + ", but couldn't!");
 	return "";
+}
+
+const HashingData* DataModule::GetEntityHash(const std::string& exactType, const std::string& instance) {
+	const Entity* foundEntity = GetEntityPreset(exactType, instance);
+	if (foundEntity == nullptr) {
+		return nullptr;
+	}
+
+	// Search for entity in instanceList
+	for (const PresetEntry& presetListEntry: m_PresetList) {
+		if (presetListEntry.m_EntityPreset == foundEntity) {
+			return &(presetListEntry.m_Hash);
+		}
+	}
+
+	RTEAbort("Tried to find allegedly existing Entity Preset Entry: " + foundEntity->GetPresetName() + ", but couldn't!");
+	return nullptr;
 }
 
 const Entity* DataModule::GetEntityPreset(const std::string& exactType, const std::string& instance) {
@@ -291,17 +320,18 @@ bool DataModule::AddEntityPreset(Entity* entityToAdd, bool overwriteSame, const 
 			// Make sure the existing one is still marked as the Original Preset
 			existingEntity->m_IsOriginalPreset = true;
 			// Alter the instance entry to reflect the data file location of the new definition
-			if (readFromFile != "Same") {
-				std::list<PresetEntry>::iterator itr = m_PresetList.begin();
-				for (; itr != m_PresetList.end(); ++itr) {
-					// When we find the correct entry, alter its data file location
-					if ((*itr).m_EntityPreset == existingEntity) {
+			std::list<PresetEntry>::iterator itr = m_PresetList.begin();
+			for (; itr != m_PresetList.end(); ++itr) {
+				// When we find the correct entry, alter its data file location
+				if ((*itr).m_EntityPreset == existingEntity) {
+					if (readFromFile != "Same") {
 						(*itr).m_FileReadFrom = readFromFile;
-						break;
 					}
+					(*itr).m_Hash(std::move(existingEntity->Hash()));
+					break;
 				}
-				RTEAssert(itr != m_PresetList.end(), "Tried to alter allegedly existing Entity Preset Entry: " + entityToAdd->GetPresetName() + ", but couldn't find it in the list!");
 			}
+			RTEAssert(itr != m_PresetList.end(), "Tried to alter allegedly existing Entity Preset Entry: " + entityToAdd->GetPresetName() + ", but couldn't find it in the list!");
 			return true;
 		} else {
 			return false;
