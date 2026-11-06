@@ -76,6 +76,8 @@ namespace RTE {
 		/// to destroy all inherited members also.
 		void Destroy(bool notInherited = false) override;
 
+		int Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const override;
+
 		/// Gets the width this' bitmap.
 		/// @return Width of bitmap.
 		const int GetBitmapWidth() const { return m_pPresentationBitmap->w; }

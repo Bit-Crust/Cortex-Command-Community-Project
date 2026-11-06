@@ -174,6 +174,10 @@ namespace RTE {
 		/// to destroy all inherited members also.
 		void Destroy(bool notInherited = false) override;
 
+#pragma region INI Handling
+		int Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const override;
+#pragma endregion
+
 		/// Gets the total liquidation value of this Actor and all its carried
 		/// gold and inventory.
 		/// @param nativeModule If this is supposed to be adjusted for a specific Tech's subjective (default: 0)

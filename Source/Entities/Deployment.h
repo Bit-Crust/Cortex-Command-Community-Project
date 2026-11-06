@@ -67,6 +67,8 @@ namespace RTE {
 		/// to destroy all inherited members also.
 		void Destroy(bool notInherited = false) override;
 
+		int Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const override;
+
 		/// Gets a bitmap showing a good identifyable icon of this, for use in
 		/// GUI lists etc.
 		/// @return A good identifyable graphical representation of this in a BITMAP, if

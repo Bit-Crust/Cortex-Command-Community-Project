@@ -44,6 +44,10 @@ namespace RTE {
 		}
 #pragma endregion
 
+#pragma region INI Handling
+		int Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const override;
+#pragma endregion
+
 		/// Updates this AEJetpack from our parent actor.
 		void UpdateBurstState(Actor& parentActor);
 

@@ -54,6 +54,10 @@ namespace RTE {
 		/// to destroy all inherited members also.
 		void Destroy(bool notInherited = false) override;
 
+#pragma region INI Handling
+		int Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const override;
+#pragma endregion
+
 		/// Indicates whether this PEmitter is currently enabled and emitting.
 		/// @return Whether it's emitting or not.
 		bool IsEmitting() const { return m_EmitEnabled; }

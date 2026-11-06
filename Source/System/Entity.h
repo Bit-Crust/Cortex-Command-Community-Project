@@ -238,6 +238,13 @@ namespace RTE {
 		/// @param writer A Writer that the Entity will save itself to.
 		/// @return An error return value signaling success or any particular failure. Anything below 0 is an error signal.
 		int SavePresetCopy(Writer& writer) const;
+
+		/// Records an Entity against a reference, expected to be it's preset.
+		/// @param writer A Writer that the Entity will save itself to.
+		/// @param reference A reference preset to write properties against.
+		/// @param hashData A clump of hash data for cheap property comparisons.
+		/// @return An error return value signaling success or any particular failure. Anything below 0 is an error signal.
+		virtual int Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const;
 #pragma endregion
 
 #pragma region Getters and Setters

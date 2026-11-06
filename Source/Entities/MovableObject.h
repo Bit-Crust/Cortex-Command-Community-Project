@@ -91,6 +91,10 @@ namespace RTE {
 		/// to destroy all inherited members also.
 		void Destroy(bool notInherited = false) override;
 
+#pragma region INI Handling
+		int Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const override;
+#pragma endregion
+
 #pragma region Script Handling
 		/// Loads the script at the given script path onto the object, checking for appropriately named functions within it.
 		/// If the script contains a Create function and this MO's scripts are running, the Create function will be run immediately.

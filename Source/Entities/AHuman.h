@@ -80,6 +80,8 @@ namespace RTE {
 			Actor::Reset();
 		}
 
+		int Write(Writer& writer, const Entity& entityReference, HashingData& hashData) const override;
+
 		/// Destroys and resets (through Clear()) the SceneLayer object.
 		/// @param notInherited Whether to only destroy the members defined in this derived class, or (default: false)
 		/// to destroy all inherited members also.
